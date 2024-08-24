@@ -70,7 +70,7 @@ func main() {
 	go func() {
 		err := proxy.Listen(ctx)
 		if err != nil {
-			log.Fatal(err)
+			log.Fatalf("failed to initialize DNS proxy: %v", err)
 		}
 	}()
 
@@ -87,7 +87,7 @@ func main() {
 	for {
 		select {
 		case <-c:
-			fmt.Printf("Graceful shutdown...")
+			fmt.Println("Graceful shutdown...")
 			cancel()
 			err = dnsOverrider.Disable()
 			if err != nil {
