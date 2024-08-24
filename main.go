@@ -5,6 +5,9 @@ import (
 	dnsProxy "kvas2-go/dns-proxy"
 	ruleComposer "kvas2-go/rule-composer"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 )
 
 var (
@@ -46,9 +49,22 @@ func main() {
 			}
 		}
 	}
-	err := proxy.Listen()
-	if err != nil {
-		log.Fatal(err)
+
+	go func() {
+		err := proxy.Listen()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}()
+
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+
+	for {
+		select {
+		case <-c:
+			proxy.Close()
+			return
+		}
 	}
-	defer proxy.Close()
 }

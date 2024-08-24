@@ -3,6 +3,7 @@ package dnsProxy
 import (
 	"encoding/hex"
 	"fmt"
+	"github.com/coreos/go-iptables/iptables"
 	"log"
 	"net"
 	"time"
@@ -23,7 +24,23 @@ type DNSProxy struct {
 }
 
 func (p DNSProxy) Close() error {
-	return p.udpConn.Close()
+	ipt, err := iptables.New()
+	if err != nil {
+		log.Fatalf("iptables init fail: %v", err)
+	}
+
+	err = ipt.DeleteIfExists("nat", "PREROUTING", "-j", "KVAS2_DNSOVERRIDE")
+	if err != nil {
+		log.Fatalf("failed to attaching chain: %v", err)
+	}
+
+	err = ipt.ClearAndDeleteChain("nat", "KVAS2_DNSOVERRIDE")
+	if err != nil {
+		log.Fatalf("failed to delete chain: %v", err)
+	}
+
+	return nil
+	//return p.udpConn.Close()
 }
 
 func (p DNSProxy) sendToUpstream(isTCP bool, request []byte) ([]byte, error) {
@@ -89,6 +106,26 @@ func (p DNSProxy) handleDNSRequest(clientAddr *net.UDPAddr, buffer []byte) {
 
 func (p DNSProxy) Listen() error {
 	var err error
+
+	ipt, err := iptables.New()
+	if err != nil {
+		log.Fatalf("iptables init fail: %v", err)
+	}
+
+	err = ipt.ClearChain("nat", "KVAS2_DNSOVERRIDE")
+	if err != nil {
+		log.Fatalf("failed to clean chain: %v", err)
+	}
+
+	err = ipt.AppendUnique("nat", "KVAS2_DNSOVERRIDE", "-p", "udp", "--dport", "53", "-j", "REDIRECT", "--to-port", "7548")
+	if err != nil {
+		log.Fatalf("failed to create rule: %v", err)
+	}
+
+	err = ipt.InsertUnique("nat", "PREROUTING", 1, "-j", "KVAS2_DNSOVERRIDE")
+	if err != nil {
+		log.Fatalf("failed to attaching chain: %v", err)
+	}
 
 	udpAddr, err := net.ResolveUDPAddr("udp", p.listenAddr)
 	if err != nil {

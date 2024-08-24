@@ -5,7 +5,7 @@ Better implementation of [KVAS](https://github.com/qzeleza/kvas)
 Roadmap:
 - [x] DNS Proxy
 - [x] DNS Records table
-- [ ] IPTables rules to remap DNS server [1]
+- [x] IPTables rules to remap DNS server [1]
 - [ ] Rule composer
 - [ ] List loading/watching (temporary)
 - [ ] IPSet integration
