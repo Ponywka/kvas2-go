@@ -11,6 +11,7 @@ Roadmap:
 - [ ] IPSet integration
 - [ ] Listing of interfaces
 - [ ] IPTables rules to IPSet [2]
+- [ ] It is not a concept now... REFACTORING TIME!!!
 - [ ] HTTP API
 - [ ] HTTP GUI
 - [ ] Getting readable names of interfaces from Keenetic NDMS
