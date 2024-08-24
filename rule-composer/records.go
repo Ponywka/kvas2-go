@@ -17,6 +17,10 @@ func (r *Records) getCNames(domainName string, recursive bool) []string {
 	for cname, ttl := range r.cnameRecords[domainName] {
 		if time.Now().Sub(ttl).Nanoseconds() > 0 {
 			delete(r.cnameRecords[domainName], cname)
+			if len(r.cnameRecords[domainName]) == 0 {
+				delete(r.cnameRecords, domainName)
+				return nil
+			}
 			continue
 		}
 		cNameList = append(cNameList, cname)
@@ -56,6 +60,10 @@ func (r *Records) GetARecords(domainName string, recursive bool) []net.IP {
 		for addr, ttl := range r.aRecords[cName] {
 			if time.Now().Sub(ttl).Nanoseconds() > 0 {
 				delete(r.aRecords[cName], addr)
+				if len(r.aRecords[cName]) == 0 {
+					delete(r.aRecords, cName)
+					break
+				}
 				continue
 			}
 			aRecords = append(aRecords, []byte(addr))
@@ -85,6 +93,37 @@ func (r *Records) PutARecord(domainName string, addr net.IP, ttl int64) {
 	}
 
 	r.aRecords[domainName][string(addr)] = time.Now().Add(time.Second * time.Duration(ttl))
+}
+
+func (r *Records) Cleanup() {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	for domainName, _ := range r.aRecords {
+		for aRecord, ttl := range r.aRecords[domainName] {
+			if time.Now().Sub(ttl).Nanoseconds() <= 0 {
+				continue
+			}
+			delete(r.aRecords[domainName], aRecord)
+			if len(r.aRecords[domainName]) == 0 {
+				delete(r.aRecords, domainName)
+				break
+			}
+		}
+	}
+
+	for domainName, _ := range r.cnameRecords {
+		for cname, ttl := range r.cnameRecords[domainName] {
+			if time.Now().Sub(ttl).Nanoseconds() <= 0 {
+				continue
+			}
+			delete(r.cnameRecords[domainName], cname)
+			if len(r.cnameRecords[domainName]) == 0 {
+				delete(r.cnameRecords, domainName)
+				break
+			}
+		}
+	}
 }
 
 func NewRecords() *Records {
