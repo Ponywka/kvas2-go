@@ -18,8 +18,18 @@ Roadmap:
 
 [1] Example
 ```bash
+KVAS2_NAME=KVAS2
 KVAS2_DNS_PORT=7548
-iptables -t nat -I PREROUTING 1 -p udp --dport 53 -j REDIRECT --to-port $KVAS2_DNS_PORT
+
+# Создание правил
+iptables -t nat -N ${KVAS2_NAME}_PREROUTING
+iptables -t nat -A ${KVAS2_NAME}_PREROUTING -p udp --dport 53 -j REDIRECT --to-port ${KVAS2_DNS_PORT}
+
+# Применение правил
+iptables -t nat -I PREROUTING 1 -j ${KVAS2_NAME}_PREROUTING
+
+# Удаление правил
+iptables -t nat -D PREROUTING -j ${KVAS2_NAME}_PREROUTING
 ```
 
 [2] Example
