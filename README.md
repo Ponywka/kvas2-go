@@ -30,6 +30,8 @@ iptables -t nat -I PREROUTING 1 -j ${KVAS2_NAME}_DNSOVERRIDE_PREROUTING
 
 # Удаление правил
 iptables -t nat -D PREROUTING -j ${KVAS2_NAME}_DNSOVERRIDE_PREROUTING
+iptables -t nat -F ${KVAS2_NAME}_DNSOVERRIDE_PREROUTING
+iptables -t nat -X ${KVAS2_NAME}_DNSOVERRIDE_PREROUTING
 ```
 
 [2] Example
@@ -56,5 +58,9 @@ iptables -t nat -A POSTROUTING -j ${KVAS2_NAME}_ROUTING_POSTROUTING
 ip rule del fwmark ${MARK} table ${TABLE}
 ip route del default dev ${INTERFACE} table ${TABLE}
 iptables -t mangle -D PREROUTING -j ${KVAS2_NAME}_ROUTING_PREROUTING
+iptables -t mangle -F ${KVAS2_NAME}_ROUTING_PREROUTING
+iptables -t mangle -X ${KVAS2_NAME}_ROUTING_PREROUTING
 iptables -t nat -D POSTROUTING -j ${KVAS2_NAME}_ROUTING_POSTROUTING
+iptables -t nat -F ${KVAS2_NAME}_ROUTING_POSTROUTING
+iptables -t nat -X ${KVAS2_NAME}_ROUTING_POSTROUTING
 ```
