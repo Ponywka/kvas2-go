@@ -95,6 +95,34 @@ func (r *Records) PutARecord(domainName string, addr net.IP, ttl time.Duration) 
 	r.aRecords[domainName][string(addr)] = time.Now().Add(ttl)
 }
 
+func (r *Records) ListKnownCNameRecords() []string {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+
+	domains := make([]string, len(r.cnameRecords))
+	counter := 0
+	for domain, _ := range r.cnameRecords {
+		domains[counter] = domain
+		counter++
+	}
+
+	return domains
+}
+
+func (r *Records) ListKnownARecords() []string {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+
+	domains := make([]string, len(r.aRecords))
+	counter := 0
+	for domain, _ := range r.aRecords {
+		domains[counter] = domain
+		counter++
+	}
+
+	return domains
+}
+
 func (r *Records) Cleanup() {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
