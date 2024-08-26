@@ -27,7 +27,7 @@ func parseName(response []byte, pos int) (*Name, int, error) {
 			break
 		}
 
-		if length&0xC0 == 0xC0 {
+		if length&0xC0 != 0 {
 			if responseLen < pos+1 {
 				return nil, pos, io.EOF
 			}

@@ -47,7 +47,6 @@ func (p DNSProxy) Listen(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("Shutting down DNS proxy...")
 			return nil
 		default:
 			buffer := make([]byte, DNSMaxUDPPackageSize)

@@ -1,4 +1,4 @@
-package ruleComposer
+package main
 
 import (
 	"net"
@@ -73,7 +73,7 @@ func (r *Records) GetARecords(domainName string, recursive bool) []net.IP {
 	return aRecords
 }
 
-func (r *Records) PutCNameRecord(domainName string, cName string, ttl int64) {
+func (r *Records) PutCNameRecord(domainName string, cName string, ttl time.Duration) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
@@ -81,10 +81,10 @@ func (r *Records) PutCNameRecord(domainName string, cName string, ttl int64) {
 		r.cnameRecords[domainName] = make(map[string]time.Time)
 	}
 
-	r.cnameRecords[domainName][cName] = time.Now().Add(time.Second * time.Duration(ttl))
+	r.cnameRecords[domainName][cName] = time.Now().Add(ttl)
 }
 
-func (r *Records) PutARecord(domainName string, addr net.IP, ttl int64) {
+func (r *Records) PutARecord(domainName string, addr net.IP, ttl time.Duration) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
@@ -92,7 +92,7 @@ func (r *Records) PutARecord(domainName string, addr net.IP, ttl int64) {
 		r.aRecords[domainName] = make(map[string]time.Time)
 	}
 
-	r.aRecords[domainName][string(addr)] = time.Now().Add(time.Second * time.Duration(ttl))
+	r.aRecords[domainName][string(addr)] = time.Now().Add(ttl)
 }
 
 func (r *Records) Cleanup() {
