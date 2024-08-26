@@ -38,23 +38,25 @@ type Record struct {
 }
 
 func (r *Record) Cleanup() bool {
-	newARecords := make([]*ARecord, 0)
+	i := 0
 	for _, record := range r.ARecords {
-		if time.Now().Sub(record.Deadline).Nanoseconds() <= 0 {
-			newARecords = append(newARecords, record)
+		if time.Now().Before(record.Deadline) {
+			r.ARecords[i] = record
+			i++
 		}
 	}
-	r.ARecords = newARecords
+	r.ARecords = r.ARecords[:i]
 
-	newCNameRecords := make([]*CNameRecord, 0)
+	i = 0
 	for _, record := range r.CNameRecords {
-		if time.Now().Sub(record.Deadline).Nanoseconds() <= 0 {
-			newCNameRecords = append(newCNameRecords, record)
+		if time.Now().Before(record.Deadline) {
+			r.CNameRecords[i] = record
+			i++
 		}
 	}
-	r.CNameRecords = newCNameRecords
+	r.CNameRecords = r.CNameRecords[:i]
 
-	return len(newARecords) == 0 && len(newCNameRecords) == 0
+	return len(r.ARecords) == 0 && len(r.CNameRecords) == 0
 }
 
 func NewRecord(domainName string) *Record {
