@@ -142,5 +142,4 @@ func New(config Config) (*App, error) {
 	app.Groups = make([]*models.Group, 0)
 
 	return app, nil
-
 }
