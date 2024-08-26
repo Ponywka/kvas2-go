@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"net"
-	"slices"
 	"sync"
 	"time"
 )
@@ -71,7 +70,7 @@ type Records struct {
 	Records map[string]*Record
 }
 
-func (r *Records) getCNames(domainName string, recursive bool, excludeDomains ...string) []string {
+func (r *Records) getCNames(domainName string, recursive bool, reversive bool) []string {
 	record, ok := r.Records[domainName]
 	if !ok {
 		return nil
@@ -81,43 +80,105 @@ func (r *Records) getCNames(domainName string, recursive bool, excludeDomains ..
 		return nil
 	}
 
-	cNameList := make([]string, len(record.CNameRecords))
-	for idx, cnameRecord := range record.CNameRecords {
-		cNameList[idx] = cnameRecord.CName
+	excludedFromCNameList := map[string]struct{}{
+		domainName: {},
+	}
+
+	cNameList := make([]string, 0)
+	for _, cnameRecord := range record.CNameRecords {
+		if _, exists := excludedFromCNameList[cnameRecord.CName]; !exists {
+			cNameList = append(cNameList, cnameRecord.CName)
+			excludedFromCNameList[cnameRecord.CName] = struct{}{}
+		}
 	}
 
 	if recursive {
-		origCNameLen := len(cNameList)
-		for i := 0; i < origCNameLen; i++ {
-			if slices.Contains(excludeDomains, cNameList[i]) {
-				continue
-			}
+		excludedFromProcess := map[string]struct{}{
+			domainName: {},
+		}
 
-			excludeDomains = append(excludeDomains, cNameList...)
-			parentList := r.getCNames(cNameList[i], true, excludeDomains...)
-			if parentList != nil {
-				cNameList = append(cNameList, parentList...)
+		processingList := cNameList
+		for len(processingList) > 0 {
+			newProcessingList := []string{}
+			for _, cname := range processingList {
+				if _, exists := excludedFromProcess[cname]; exists {
+					continue
+				}
+
+				record, ok := r.Records[cname]
+				if !ok {
+					continue
+				}
+				if record.Cleanup() {
+					delete(r.Records, cname)
+					continue
+				}
+
+				for _, cNameRecord := range record.CNameRecords {
+					if _, exists := excludedFromCNameList[cNameRecord.CName]; !exists {
+						cNameList = append(cNameList, cNameRecord.CName)
+						excludedFromCNameList[cNameRecord.CName] = struct{}{}
+					}
+					newProcessingList = append(newProcessingList, cNameRecord.CName)
+				}
 			}
+			processingList = newProcessingList
+		}
+	}
+
+	if reversive {
+		excludedFromProcess := make(map[string]struct{})
+		processingList := []string{domainName}
+		for len(processingList) > 0 {
+			nextProcessingList := make([]string, 0)
+			for _, target := range processingList {
+				if _, exists := excludedFromProcess[target]; exists {
+					continue
+				}
+
+				for cname, record := range r.Records {
+					if record.Cleanup() {
+						delete(r.Records, cname)
+						continue
+					}
+
+					for _, cnameRecord := range record.CNameRecords {
+						if cnameRecord.CName != target {
+							continue
+						}
+
+						if _, exists := excludedFromCNameList[record.Name]; !exists {
+							cNameList = append(cNameList, record.Name)
+							excludedFromCNameList[record.Name] = struct{}{}
+						}
+						nextProcessingList = append(nextProcessingList, record.Name)
+						break
+					}
+				}
+
+				excludedFromProcess[target] = struct{}{}
+			}
+			processingList = nextProcessingList
 		}
 	}
 
 	return cNameList
 }
 
-func (r *Records) GetCNameRecords(domainName string, recursive bool) []string {
+func (r *Records) GetCNameRecords(domainName string, recursive bool, reversive bool) []string {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
 
-	return r.getCNames(domainName, recursive)
+	return r.getCNames(domainName, recursive, reversive)
 }
 
-func (r *Records) GetARecords(domainName string, recursive bool) []net.IP {
+func (r *Records) GetARecords(domainName string, recursive bool, reversive bool) []net.IP {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
 
 	cNameList := []string{domainName}
 	if recursive {
-		cNameList = append(cNameList, r.getCNames(domainName, true)...)
+		cNameList = append(cNameList, r.getCNames(domainName, true, reversive)...)
 	}
 
 	aRecords := make([]net.IP, 0)

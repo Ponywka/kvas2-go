@@ -76,11 +76,48 @@ func (a *App) Listen(ctx context.Context) []error {
 	return errs
 }
 
+func (a *App) processARecord(aRecord dnsProxy.Address) {
+	ttlDuration := time.Duration(aRecord.TTL) * time.Second
+	if ttlDuration < a.Config.MinimalTTL {
+		ttlDuration = a.Config.MinimalTTL
+	}
+
+	a.Records.PutARecord(aRecord.Name.String(), aRecord.Address, ttlDuration)
+
+	cNames := append([]string{aRecord.Name.String()}, a.Records.GetCNameRecords(aRecord.Name.String(), true, true)...)
+	fmt.Printf("Relates CNames:\n")
+	for idx, cName := range cNames {
+		fmt.Printf("|- #%d: %s\n", idx, cName)
+	}
+
+	for _, group := range a.Groups {
+		for _, domain := range group.Domains {
+			if !domain.IsEnabled() {
+				continue
+			}
+			for _, cName := range cNames {
+				if domain.IsMatch(cName) {
+					fmt.Printf("|- Matched %s (%s) for %s in %s group!\n", cName, aRecord.Name, domain.Domain, group.Name)
+				}
+			}
+		}
+	}
+}
+
+func (a *App) processCNameRecord(cNameRecord dnsProxy.CName) {
+	ttlDuration := time.Duration(cNameRecord.TTL) * time.Second
+	if ttlDuration < a.Config.MinimalTTL {
+		ttlDuration = a.Config.MinimalTTL
+	}
+
+	a.Records.PutCNameRecord(cNameRecord.Name.String(), cNameRecord.CName.String(), ttlDuration)
+}
+
 func (a *App) handleRecord(msg *dnsProxy.Message) {
 	printKnownRecords := func() {
 		for _, q := range msg.QD {
 			fmt.Printf("%04x: DBG Known addresses for: %s\n", msg.ID, q.QName.String())
-			for idx, addr := range a.Records.GetARecords(q.QName.String(), true) {
+			for idx, addr := range a.Records.GetARecords(q.QName.String(), true, false) {
 				fmt.Printf("%04x:     #%d: %s\n", msg.ID, idx, addr.String())
 			}
 		}
@@ -89,18 +126,10 @@ func (a *App) handleRecord(msg *dnsProxy.Message) {
 		switch v := rr.(type) {
 		case dnsProxy.Address:
 			fmt.Printf("%04x: -> A: Name: %s; Address: %s; TTL: %d\n", msg.ID, v.Name, v.Address.String(), v.TTL)
-			ttlDuration := time.Duration(v.TTL) * time.Second
-			if ttlDuration < a.Config.MinimalTTL {
-				ttlDuration = a.Config.MinimalTTL
-			}
-			a.Records.PutARecord(v.Name.String(), v.Address, ttlDuration)
+			a.processARecord(v)
 		case dnsProxy.CName:
 			fmt.Printf("%04x: -> CNAME: Name: %s; CName: %s\n", msg.ID, v.Name, v.CName)
-			ttlDuration := time.Duration(v.TTL) * time.Second
-			if ttlDuration < a.Config.MinimalTTL {
-				ttlDuration = a.Config.MinimalTTL
-			}
-			a.Records.PutCNameRecord(v.Name.String(), v.CName.String(), ttlDuration)
+			a.processCNameRecord(v)
 		default:
 			fmt.Printf("%04x: -> Unknown: %x\n", msg.ID, v.EncodeResource())
 		}
@@ -120,6 +149,7 @@ func (a *App) handleRecord(msg *dnsProxy.Message) {
 		parseResponseRecord(a)
 	}
 	printKnownRecords()
+	fmt.Println()
 }
 
 func New(config Config) (*App, error) {
