@@ -2,12 +2,20 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"kvas2-go/models"
-	"kvas2-go/pkg/dns-proxy"
-	"kvas2-go/pkg/iptables-helper"
+	"strconv"
 	"sync"
 	"time"
+
+	"kvas2-go/models"
+	"kvas2-go/pkg/dns-proxy"
+	"kvas2-go/pkg/ip-helper"
+	"kvas2-go/pkg/iptables-helper"
+)
+
+var (
+	ErrGroupIDConflict = errors.New("group id conflict")
 )
 
 type Config struct {
@@ -23,7 +31,7 @@ type App struct {
 	DNSProxy     *dnsProxy.DNSProxy
 	DNSOverrider *iptablesHelper.DNSOverrider
 	Records      *Records
-	Groups       []*models.Group
+	Groups       map[int]Group
 }
 
 func (a *App) Listen(ctx context.Context) []error {
@@ -74,6 +82,38 @@ func (a *App) Listen(ctx context.Context) []error {
 	}
 
 	return errs
+}
+
+func (a *App) AppendGroup(group *models.Group) error {
+	if _, exists := a.Groups[group.ID]; exists {
+		return ErrGroupIDConflict
+	}
+
+	fwmark, err := ipHelper.GetUnusedFwMark()
+	if err != nil {
+		return fmt.Errorf("error while getting fwmark: %w", err)
+	}
+
+	table, err := ipHelper.GetUnusedTable()
+	if err != nil {
+		return fmt.Errorf("error while getting table: %w", err)
+	}
+
+	out, err := ipHelper.ExecIp("rule", "add", "fwmark", strconv.Itoa(int(fwmark)), "table", strconv.Itoa(int(table)))
+	if err != nil {
+		return err
+	}
+	if len(out) != 0 {
+		return errors.New(string(out))
+	}
+
+	a.Groups[group.ID] = Group{
+		Group:  group,
+		FWMark: fwmark,
+		Table:  table,
+	}
+
+	return nil
 }
 
 func (a *App) processARecord(aRecord dnsProxy.Address) {
@@ -169,7 +209,7 @@ func New(config Config) (*App, error) {
 		return nil, fmt.Errorf("failed to initialize DNS overrider: %w", err)
 	}
 
-	app.Groups = make([]*models.Group, 0)
+	app.Groups = make(map[int]Group)
 
 	return app, nil
 }
