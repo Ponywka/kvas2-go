@@ -31,7 +31,7 @@ type App struct {
 	DNSProxy     *dnsProxy.DNSProxy
 	DNSOverrider *iptablesHelper.DNSOverrider
 	Records      *Records
-	Groups       map[int]Group
+	Groups       map[int]*Group
 }
 
 func (a *App) Listen(ctx context.Context) []error {
@@ -66,6 +66,14 @@ func (a *App) Listen(ctx context.Context) []error {
 		return errs
 	}
 
+	for idx, _ := range a.Groups {
+		err := a.usingGroup(idx)
+		if err != nil {
+			handleError(fmt.Errorf("failed to using group: %w", err))
+			return errs
+		}
+	}
+
 	go func() {
 		if err := a.DNSProxy.Listen(newCtx); err != nil {
 			handleError(fmt.Errorf("failed to initialize DNS proxy: %v", err))
@@ -77,6 +85,14 @@ func (a *App) Listen(ctx context.Context) []error {
 	case <-isError:
 	}
 
+	for idx, _ := range a.Groups {
+		err := a.releaseGroup(idx)
+		if err != nil {
+			handleError(fmt.Errorf("failed to release group: %w", err))
+			return errs
+		}
+	}
+
 	if err := a.DNSOverrider.Disable(); err != nil {
 		handleError(fmt.Errorf("failed to rollback override DNS changes: %w", err))
 	}
@@ -84,11 +100,7 @@ func (a *App) Listen(ctx context.Context) []error {
 	return errs
 }
 
-func (a *App) AppendGroup(group *models.Group) error {
-	if _, exists := a.Groups[group.ID]; exists {
-		return ErrGroupIDConflict
-	}
-
+func (a *App) usingGroup(idx int) error {
 	fwmark, err := ipHelper.GetUnusedFwMark()
 	if err != nil {
 		return fmt.Errorf("error while getting fwmark: %w", err)
@@ -107,10 +119,32 @@ func (a *App) AppendGroup(group *models.Group) error {
 		return errors.New(string(out))
 	}
 
-	a.Groups[group.ID] = Group{
-		Group:  group,
-		FWMark: fwmark,
-		Table:  table,
+	a.Groups[idx].FWMark = fwmark
+	a.Groups[idx].Table = table
+
+	return nil
+}
+
+func (a *App) releaseGroup(idx int) error {
+	out, err := ipHelper.ExecIp("rule", "del", "fwmark", strconv.Itoa(int(a.Groups[idx].FWMark)), "table", strconv.Itoa(int(a.Groups[idx].Table)))
+	if err != nil {
+		return err
+	}
+
+	if len(out) != 0 {
+		return errors.New(string(out))
+	}
+
+	return nil
+}
+
+func (a *App) AppendGroup(group *models.Group) error {
+	if _, exists := a.Groups[group.ID]; exists {
+		return ErrGroupIDConflict
+	}
+
+	a.Groups[group.ID] = &Group{
+		Group: group,
 	}
 
 	return nil
@@ -209,7 +243,7 @@ func New(config Config) (*App, error) {
 		return nil, fmt.Errorf("failed to initialize DNS overrider: %w", err)
 	}
 
-	app.Groups = make(map[int]Group)
+	app.Groups = make(map[int]*Group)
 
 	return app, nil
 }
