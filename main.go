@@ -13,7 +13,7 @@ import (
 func main() {
 	app, err := New(Config{
 		MinimalTTL:             time.Hour,
-		ChainPostfix:           "KVAS2",
+		ChainPostfix:           "KVAS2_",
 		TargetDNSServerAddress: "127.0.0.1:53",
 		ListenPort:             7548,
 	})

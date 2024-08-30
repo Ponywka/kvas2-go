@@ -227,7 +227,7 @@ func New(config Config) (*App, error) {
 
 	app.Records = NewRecords()
 
-	app.DNSOverrider, err = iptablesHelper.NewDNSOverrider(fmt.Sprintf("%s_DNSOVERRIDER", app.Config.ChainPostfix), app.Config.ListenPort)
+	app.DNSOverrider, err = iptablesHelper.NewDNSOverrider(fmt.Sprintf("%sDNSOVERRIDER", app.Config.ChainPostfix), app.Config.ListenPort)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize DNS overrider: %w", err)
 	}
