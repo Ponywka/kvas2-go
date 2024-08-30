@@ -2,9 +2,11 @@ package dnsProxy
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net"
+	"os"
 	"time"
 )
 
@@ -85,6 +87,11 @@ func (p DNSProxy) handleDNSRequest(clientAddr *net.UDPAddr, buffer []byte) {
 	response := make([]byte, DNSMaxUDPPackageSize)
 	n, err := conn.Read(response)
 	if err != nil {
+		if errors.Is(err, os.ErrDeadlineExceeded) {
+			// Just skip it
+			return
+		}
+
 		// TODO: Error log level
 		log.Printf("failed to read response from target DNS: %v", err)
 		return
