@@ -61,13 +61,13 @@ func GetUsedFwMarks() ([]uint32, error) {
 	return marks, nil
 }
 
-func GetUnusedFwMark() (uint32, error) {
+func GetUnusedFwMark(startFrom uint32) (uint32, error) {
 	usedFwMarks, err := GetUsedFwMarks()
 	if err != nil {
 		return 0, fmt.Errorf("error while getting used fwmarks: %w", err)
 	}
 
-	fwmark := uint32(1)
+	fwmark := startFrom
 	for slices.Contains(usedFwMarks, fwmark) {
 		fwmark++
 		if fwmark == 0xFFFFFFFF {
@@ -182,13 +182,13 @@ func GetUsedTables() ([]uint16, error) {
 	return tables, nil
 }
 
-func GetUnusedTable() (uint16, error) {
+func GetUnusedTable(startFrom uint16) (uint16, error) {
 	usedTables, err := GetUsedTables()
 	if err != nil {
 		return 0, fmt.Errorf("error while getting used tables: %w", err)
 	}
 
-	tableID := uint16(1)
+	tableID := startFrom
 	for slices.Contains(usedTables, tableID) {
 		tableID++
 		if tableID > 0x3FF {

@@ -101,12 +101,16 @@ func (a *App) Listen(ctx context.Context) []error {
 }
 
 func (a *App) usingGroup(idx int) error {
-	fwmark, err := ipHelper.GetUnusedFwMark()
+	if a.Groups[idx].options.Enabled {
+		return nil
+	}
+
+	fwmark, err := ipHelper.GetUnusedFwMark(1)
 	if err != nil {
 		return fmt.Errorf("error while getting fwmark: %w", err)
 	}
 
-	table, err := ipHelper.GetUnusedTable()
+	table, err := ipHelper.GetUnusedTable(1)
 	if err != nil {
 		return fmt.Errorf("error while getting table: %w", err)
 	}
@@ -119,14 +123,21 @@ func (a *App) usingGroup(idx int) error {
 		return errors.New(string(out))
 	}
 
-	a.Groups[idx].FWMark = fwmark
-	a.Groups[idx].Table = table
+	a.Groups[idx].options.Enabled = true
+	a.Groups[idx].options.FWMark = fwmark
+	a.Groups[idx].options.Table = table
 
 	return nil
 }
 
 func (a *App) releaseGroup(idx int) error {
-	out, err := ipHelper.ExecIp("rule", "del", "fwmark", strconv.Itoa(int(a.Groups[idx].FWMark)), "table", strconv.Itoa(int(a.Groups[idx].Table)))
+	if !a.Groups[idx].options.Enabled {
+		return nil
+	}
+
+	fwmark := strconv.Itoa(int(a.Groups[idx].options.FWMark))
+	table := strconv.Itoa(int(a.Groups[idx].options.Table))
+	out, err := ipHelper.ExecIp("rule", "del", "fwmark", fwmark, "table", table)
 	if err != nil {
 		return err
 	}
