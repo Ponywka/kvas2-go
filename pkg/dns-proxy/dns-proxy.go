@@ -2,7 +2,6 @@ package dnsProxy
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"log"
 	"net"
@@ -90,9 +89,6 @@ func (p DNSProxy) handleDNSRequest(clientAddr *net.UDPAddr, buffer []byte) {
 		log.Printf("failed to read response from target DNS: %v", err)
 		return
 	}
-
-	// TODO: Debug log level
-	log.Printf("Response: %s", hex.EncodeToString(response[:n]))
 
 	msg, err := ParseResponse(response[:n])
 	if err == nil {

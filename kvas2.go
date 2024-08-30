@@ -159,11 +159,6 @@ func (a *App) processARecord(aRecord dnsProxy.Address) {
 	a.Records.PutARecord(aRecord.Name.String(), aRecord.Address, ttlDuration)
 
 	cNames := append([]string{aRecord.Name.String()}, a.Records.GetCNameRecords(aRecord.Name.String(), true, true)...)
-	fmt.Printf("Relates CNames:\n")
-	for idx, cName := range cNames {
-		fmt.Printf("|- #%d: %s\n", idx, cName)
-	}
-
 	for _, group := range a.Groups {
 		for _, domain := range group.Domains {
 			if !domain.IsEnabled() {
@@ -171,7 +166,7 @@ func (a *App) processARecord(aRecord dnsProxy.Address) {
 			}
 			for _, cName := range cNames {
 				if domain.IsMatch(cName) {
-					fmt.Printf("|- Matched %s (%s) for %s in %s group!\n", cName, aRecord.Name, domain.Domain, group.Name)
+					fmt.Printf("Matched %s (%s) for %s in %s group!\n", cName, aRecord.Name, domain.Domain, group.Name)
 				}
 			}
 		}
@@ -187,43 +182,26 @@ func (a *App) processCNameRecord(cNameRecord dnsProxy.CName) {
 	a.Records.PutCNameRecord(cNameRecord.Name.String(), cNameRecord.CName.String(), ttlDuration)
 }
 
-func (a *App) handleRecord(msg *dnsProxy.Message) {
-	printKnownRecords := func() {
-		for _, q := range msg.QD {
-			fmt.Printf("%04x: DBG Known addresses for: %s\n", msg.ID, q.QName.String())
-			for idx, addr := range a.Records.GetARecords(q.QName.String(), true, false) {
-				fmt.Printf("%04x:     #%d: %s\n", msg.ID, idx, addr.String())
-			}
-		}
+func (a *App) handleRecord(rr dnsProxy.ResourceRecord) {
+	switch v := rr.(type) {
+	case dnsProxy.Address:
+		a.processARecord(v)
+	case dnsProxy.CName:
+		a.processCNameRecord(v)
+	default:
 	}
-	parseResponseRecord := func(rr dnsProxy.ResourceRecord) {
-		switch v := rr.(type) {
-		case dnsProxy.Address:
-			fmt.Printf("%04x: -> A: Name: %s; Address: %s; TTL: %d\n", msg.ID, v.Name, v.Address.String(), v.TTL)
-			a.processARecord(v)
-		case dnsProxy.CName:
-			fmt.Printf("%04x: -> CNAME: Name: %s; CName: %s\n", msg.ID, v.Name, v.CName)
-			a.processCNameRecord(v)
-		default:
-			fmt.Printf("%04x: -> Unknown: %x\n", msg.ID, v.EncodeResource())
-		}
-	}
+}
 
-	printKnownRecords()
-	for _, q := range msg.QD {
-		fmt.Printf("%04x: <- Request name: %s\n", msg.ID, q.QName.String())
+func (a *App) handleMessage(msg *dnsProxy.Message) {
+	for _, rr := range msg.AN {
+		a.handleRecord(rr)
 	}
-	for _, a := range msg.AN {
-		parseResponseRecord(a)
+	for _, rr := range msg.NS {
+		a.handleRecord(rr)
 	}
-	for _, a := range msg.NS {
-		parseResponseRecord(a)
+	for _, rr := range msg.AR {
+		a.handleRecord(rr)
 	}
-	for _, a := range msg.AR {
-		parseResponseRecord(a)
-	}
-	printKnownRecords()
-	fmt.Println()
 }
 
 func New(config Config) (*App, error) {
@@ -234,7 +212,7 @@ func New(config Config) (*App, error) {
 	app.Config = config
 
 	app.DNSProxy = dnsProxy.New(app.Config.ListenPort, app.Config.TargetDNSServerAddress)
-	app.DNSProxy.MsgHandler = app.handleRecord
+	app.DNSProxy.MsgHandler = app.handleMessage
 
 	app.Records = NewRecords()
 
