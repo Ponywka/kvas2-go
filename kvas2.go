@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"sync"
 	"time"
 
@@ -128,6 +129,25 @@ func (a *App) AppendGroup(group *models.Group) error {
 	}
 
 	return nil
+}
+
+func (a *App) ListInterfaces() ([]net.Interface, error) {
+	interfaceNames := make([]net.Interface, 0)
+
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get interfaces: %w", err)
+	}
+
+	for _, iface := range interfaces {
+		if iface.Flags&net.FlagPointToPoint == 0 {
+			continue
+		}
+
+		interfaceNames = append(interfaceNames, iface)
+	}
+
+	return interfaceNames, nil
 }
 
 func (a *App) processARecord(aRecord dnsProxy.Address) {

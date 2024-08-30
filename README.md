@@ -10,7 +10,7 @@ Realized features:
 - [ ] Rule composer
 - [ ] List loading/watching (temporary)
 - [X] IPSet integration
-- [ ] Listing of interfaces
+- [X] Listing of interfaces
 - [ ] IPTables rules to IPSet [2]
 - [ ] It is not a concept now... REFACTORING TIME!!!
 - [ ] HTTP API
