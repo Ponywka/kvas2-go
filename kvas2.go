@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"sync"
 	"time"
@@ -158,17 +159,12 @@ func (a *App) processARecord(aRecord dnsProxy.Address) {
 
 	a.Records.PutARecord(aRecord.Name.String(), aRecord.Address, ttlDuration)
 
-	cNames := append([]string{aRecord.Name.String()}, a.Records.GetCNameRecords(aRecord.Name.String(), true, true)...)
+	names := append([]string{aRecord.Name.String()}, a.Records.GetCNameRecords(aRecord.Name.String(), true, true)...)
 	for _, group := range a.Groups {
-		for _, domain := range group.Domains {
-			if !domain.IsEnabled() {
-				continue
-			}
-			for _, cName := range cNames {
-				if domain.IsMatch(cName) {
-					fmt.Printf("Matched %s (%s) for %s in %s group!\n", cName, aRecord.Name, domain.Domain, group.Name)
-				}
-			}
+		err := group.HandleIPv4(names, aRecord.Address, ttlDuration)
+		if err != nil {
+			// TODO: Error log level
+			log.Printf("failed to handle address: %v", err)
 		}
 	}
 }
