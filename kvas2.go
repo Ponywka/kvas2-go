@@ -15,6 +15,7 @@ import (
 )
 
 var (
+	ErrAlreadyRunning  = errors.New("already running")
 	ErrGroupIDConflict = errors.New("group id conflict")
 )
 
@@ -32,9 +33,17 @@ type App struct {
 	DNSOverrider *iptablesHelper.DNSOverrider
 	Records      *Records
 	Groups       map[int]*Group
+
+	isRunning bool
 }
 
 func (a *App) Listen(ctx context.Context) []error {
+	if a.isRunning {
+		return []error{ErrAlreadyRunning}
+	}
+	a.isRunning = true
+	defer func() { a.isRunning = false }()
+
 	errs := make([]error, 0)
 	isError := make(chan struct{})
 
@@ -156,6 +165,13 @@ func (a *App) AppendGroup(group *models.Group) error {
 
 	a.Groups[group.ID] = &Group{
 		Group: group,
+	}
+
+	if a.isRunning {
+		err := a.Groups[group.ID].Enable()
+		if err != nil {
+			return fmt.Errorf("failed to enable appended group: %w", err)
+		}
 	}
 
 	return nil
