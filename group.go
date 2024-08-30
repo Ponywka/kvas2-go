@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"github.com/nadoo/ipset"
 	"strconv"
 
 	"kvas2-go/models"
@@ -17,7 +18,8 @@ type GroupOptions struct {
 
 type Group struct {
 	*models.Group
-	options GroupOptions
+	ipsetName string
+	options   GroupOptions
 }
 
 func (g *Group) Enable() error {
@@ -45,6 +47,15 @@ func (g *Group) Enable() error {
 		return errors.New(string(out))
 	}
 
+	err = ipset.Destroy(g.ipsetName)
+	if err != nil {
+		return fmt.Errorf("failed to destroy ipset: %w", err)
+	}
+	err = ipset.Create(g.ipsetName)
+	if err != nil {
+		return fmt.Errorf("failed to create ipset: %w", err)
+	}
+
 	g.options.Enabled = true
 	g.options.FWMark = fwmark
 	g.options.Table = table
@@ -65,6 +76,11 @@ func (g *Group) Disable() error {
 	}
 	if len(out) != 0 {
 		return errors.New(string(out))
+	}
+
+	err = ipset.Destroy(g.ipsetName)
+	if err != nil {
+		return fmt.Errorf("failed to destroy ipset: %w", err)
 	}
 
 	g.options.Enabled = false

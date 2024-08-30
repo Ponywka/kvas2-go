@@ -10,6 +10,8 @@ import (
 	"kvas2-go/models"
 	"kvas2-go/pkg/dns-proxy"
 	"kvas2-go/pkg/iptables-helper"
+
+	"github.com/nadoo/ipset"
 )
 
 var (
@@ -20,6 +22,7 @@ var (
 type Config struct {
 	MinimalTTL             time.Duration
 	ChainPostfix           string
+	IpSetPostfix           string
 	TargetDNSServerAddress string
 	ListenPort             uint16
 }
@@ -113,7 +116,8 @@ func (a *App) AppendGroup(group *models.Group) error {
 	}
 
 	a.Groups[group.ID] = &Group{
-		Group: group,
+		Group:     group,
+		ipsetName: fmt.Sprintf("%s%d", a.Config.IpSetPostfix, group.ID),
 	}
 
 	if a.isRunning {
@@ -182,6 +186,10 @@ func (a *App) handleMessage(msg *dnsProxy.Message) {
 
 func New(config Config) (*App, error) {
 	var err error
+
+	if err = ipset.Init(); err != nil {
+		return nil, fmt.Errorf("failed to initialize ipset: %w", err)
+	}
 
 	app := &App{}
 

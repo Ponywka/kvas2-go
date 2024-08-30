@@ -9,7 +9,7 @@ Realized features:
 - [x] IPTables rules to remap DNS server [1]
 - [ ] Rule composer
 - [ ] List loading/watching (temporary)
-- [ ] IPSet integration
+- [X] IPSet integration
 - [ ] Listing of interfaces
 - [ ] IPTables rules to IPSet [2]
 - [ ] It is not a concept now... REFACTORING TIME!!!
