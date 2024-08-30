@@ -4,13 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 	"sync"
 	"time"
 
 	"kvas2-go/models"
 	"kvas2-go/pkg/dns-proxy"
-	"kvas2-go/pkg/ip-helper"
 	"kvas2-go/pkg/iptables-helper"
 )
 
@@ -76,9 +74,9 @@ func (a *App) Listen(ctx context.Context) []error {
 	}
 
 	for idx, _ := range a.Groups {
-		err := a.usingGroup(idx)
+		err := a.Groups[idx].Enable()
 		if err != nil {
-			handleError(fmt.Errorf("failed to using group: %w", err))
+			handleError(fmt.Errorf("failed to enable group: %w", err))
 			return errs
 		}
 	}
@@ -95,9 +93,9 @@ func (a *App) Listen(ctx context.Context) []error {
 	}
 
 	for idx, _ := range a.Groups {
-		err := a.releaseGroup(idx)
+		err := a.Groups[idx].Disable()
 		if err != nil {
-			handleError(fmt.Errorf("failed to release group: %w", err))
+			handleError(fmt.Errorf("failed to disable group: %w", err))
 			return errs
 		}
 	}
@@ -107,55 +105,6 @@ func (a *App) Listen(ctx context.Context) []error {
 	}
 
 	return errs
-}
-
-func (a *App) usingGroup(idx int) error {
-	if a.Groups[idx].options.Enabled {
-		return nil
-	}
-
-	fwmark, err := ipHelper.GetUnusedFwMark(1)
-	if err != nil {
-		return fmt.Errorf("error while getting fwmark: %w", err)
-	}
-
-	table, err := ipHelper.GetUnusedTable(1)
-	if err != nil {
-		return fmt.Errorf("error while getting table: %w", err)
-	}
-
-	out, err := ipHelper.ExecIp("rule", "add", "fwmark", strconv.Itoa(int(fwmark)), "table", strconv.Itoa(int(table)))
-	if err != nil {
-		return err
-	}
-	if len(out) != 0 {
-		return errors.New(string(out))
-	}
-
-	a.Groups[idx].options.Enabled = true
-	a.Groups[idx].options.FWMark = fwmark
-	a.Groups[idx].options.Table = table
-
-	return nil
-}
-
-func (a *App) releaseGroup(idx int) error {
-	if !a.Groups[idx].options.Enabled {
-		return nil
-	}
-
-	fwmark := strconv.Itoa(int(a.Groups[idx].options.FWMark))
-	table := strconv.Itoa(int(a.Groups[idx].options.Table))
-	out, err := ipHelper.ExecIp("rule", "del", "fwmark", fwmark, "table", table)
-	if err != nil {
-		return err
-	}
-
-	if len(out) != 0 {
-		return errors.New(string(out))
-	}
-
-	return nil
 }
 
 func (a *App) AppendGroup(group *models.Group) error {
