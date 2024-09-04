@@ -16,7 +16,7 @@ import (
 type GroupOptions struct {
 	Enabled bool
 	FWMark  uint32
-	Table   uint16
+	Table   int
 }
 
 type Group struct {
