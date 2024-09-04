@@ -12,8 +12,6 @@ import (
 	"kvas2-go/models"
 	"kvas2-go/pkg/dns-proxy"
 	"kvas2-go/pkg/iptables-helper"
-
-	"github.com/ponywka/ipset"
 )
 
 var (
@@ -202,10 +200,6 @@ func (a *App) handleMessage(msg *dnsProxy.Message) {
 
 func New(config Config) (*App, error) {
 	var err error
-
-	if err = ipset.Init(); err != nil {
-		return nil, fmt.Errorf("failed to initialize ipset: %w", err)
-	}
 
 	app := &App{}
 

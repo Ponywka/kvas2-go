@@ -3,8 +3,9 @@ package main
 import (
 	"errors"
 	"fmt"
-	"github.com/ponywka/ipset"
+	"github.com/vishvananda/netlink"
 	"net"
+	"os"
 	"strconv"
 	"time"
 
@@ -29,6 +30,8 @@ func (g *Group) HandleIPv4(names []string, address net.IP, ttl time.Duration) er
 		return nil
 	}
 
+	ttlSeconds := uint32(ttl.Seconds())
+
 DomainSearch:
 	for _, domain := range g.Domains {
 		if !domain.IsEnabled() {
@@ -36,11 +39,13 @@ DomainSearch:
 		}
 		for _, name := range names {
 			if domain.IsMatch(name) {
-				// TODO: Looks like I need patch this module :\
-				//err := ipset.Add(g.ipsetName, address.String(), ipset.OptTimeout(uint32(ttl.Seconds())))
-				err := ipset.Add(g.ipsetName, address.String())
+				err := netlink.IpsetAdd(g.ipsetName, &netlink.IPSetEntry{
+					IP:      address,
+					Timeout: &ttlSeconds,
+					Replace: true,
+				})
 				if err != nil {
-					return fmt.Errorf("failed to assign address %s with %s ipset", address, g.ipsetName)
+					return fmt.Errorf("failed to assign address %s with %s ipset: %w", address, g.ipsetName, err)
 				}
 				break DomainSearch
 			}
@@ -75,11 +80,14 @@ func (g *Group) Enable() error {
 		return errors.New(string(out))
 	}
 
-	err = ipset.Destroy(g.ipsetName)
-	if err != nil {
+	defaultTimeout := uint32(300)
+	err = netlink.IpsetDestroy(g.ipsetName)
+	if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to destroy ipset: %w", err)
 	}
-	err = ipset.Create(g.ipsetName, ipset.OptType("hash:ip"))
+	err = netlink.IpsetCreate(g.ipsetName, "hash:ip", netlink.IpsetCreateOptions{
+		Timeout: &defaultTimeout,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to create ipset: %w", err)
 	}
@@ -106,8 +114,8 @@ func (g *Group) Disable() error {
 		return errors.New(string(out))
 	}
 
-	err = ipset.Destroy(g.ipsetName)
-	if err != nil {
+	err = netlink.IpsetDestroy(g.ipsetName)
+	if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to destroy ipset: %w", err)
 	}
 
