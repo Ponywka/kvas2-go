@@ -1,22 +1,20 @@
 package main
 
 import (
-	"errors"
 	"fmt"
-	"github.com/vishvananda/netlink"
 	"net"
 	"os"
-	"strconv"
 	"time"
 
 	"kvas2-go/models"
 	"kvas2-go/pkg/ip-helper"
+
+	"github.com/vishvananda/netlink"
 )
 
 type GroupOptions struct {
 	Enabled bool
-	FWMark  uint32
-	Table   int
+	ipRule  *netlink.Rule
 }
 
 type Group struct {
@@ -60,25 +58,22 @@ func (g *Group) Enable() error {
 		return nil
 	}
 
-	fwmark, err := ipHelper.GetUnusedFwMark(1)
+	var err error
+
+	rule := netlink.NewRule()
+	rule.Mark, err = ipHelper.GetUnusedFwMark(1)
 	if err != nil {
 		return fmt.Errorf("error while getting free fwmark: %w", err)
 	}
-
-	table, err := ipHelper.GetUnusedTable(1)
+	rule.Table, err = ipHelper.GetUnusedTable(1)
 	if err != nil {
 		return fmt.Errorf("error while getting free table: %w", err)
 	}
-
-	fwmarkStr := strconv.Itoa(int(fwmark))
-	tableStr := strconv.Itoa(int(table))
-	out, err := ipHelper.ExecIp("rule", "add", "fwmark", fwmarkStr, "table", tableStr)
+	err = netlink.RuleAdd(rule)
 	if err != nil {
-		return err
+		return fmt.Errorf("error while adding rule: %w", err)
 	}
-	if len(out) != 0 {
-		return errors.New(string(out))
-	}
+	g.options.ipRule = rule
 
 	defaultTimeout := uint32(300)
 	err = netlink.IpsetDestroy(g.ipsetName)
@@ -93,8 +88,6 @@ func (g *Group) Enable() error {
 	}
 
 	g.options.Enabled = true
-	g.options.FWMark = fwmark
-	g.options.Table = table
 
 	return nil
 }
@@ -104,14 +97,9 @@ func (g *Group) Disable() error {
 		return nil
 	}
 
-	fwmarkStr := strconv.Itoa(int(g.options.FWMark))
-	tableStr := strconv.Itoa(int(g.options.Table))
-	out, err := ipHelper.ExecIp("rule", "del", "fwmark", fwmarkStr, "table", tableStr)
+	err := netlink.RuleDel(g.options.ipRule)
 	if err != nil {
-		return err
-	}
-	if len(out) != 0 {
-		return errors.New(string(out))
+		return fmt.Errorf("error while deleting rule: %w", err)
 	}
 
 	err = netlink.IpsetDestroy(g.ipsetName)
@@ -120,8 +108,7 @@ func (g *Group) Disable() error {
 	}
 
 	g.options.Enabled = false
-	g.options.FWMark = 0
-	g.options.Table = 0
+	g.options.ipRule = nil
 
 	return nil
 }
