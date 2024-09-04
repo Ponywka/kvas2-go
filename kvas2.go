@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"net"
 	"sync"
 	"time"
@@ -12,6 +11,8 @@ import (
 	"kvas2-go/models"
 	"kvas2-go/pkg/dns-proxy"
 	"kvas2-go/pkg/iptables-helper"
+
+	"github.com/rs/zerolog/log"
 )
 
 var (
@@ -150,6 +151,12 @@ func (a *App) ListInterfaces() ([]net.Interface, error) {
 }
 
 func (a *App) processARecord(aRecord dnsProxy.Address) {
+	log.Trace().
+		Str("name", aRecord.Name.String()).
+		Str("address", aRecord.Address.String()).
+		Int("ttl", int(aRecord.TTL)).
+		Msg("processing a record")
+
 	ttlDuration := time.Duration(aRecord.TTL) * time.Second
 	if ttlDuration < a.Config.MinimalTTL {
 		ttlDuration = a.Config.MinimalTTL
@@ -161,8 +168,12 @@ func (a *App) processARecord(aRecord dnsProxy.Address) {
 	for _, group := range a.Groups {
 		err := group.HandleIPv4(names, aRecord.Address, ttlDuration)
 		if err != nil {
-			// TODO: Error log level
-			log.Printf("failed to handle address: %v", err)
+			log.Error().
+				Str("name", aRecord.Name.String()).
+				Str("address", aRecord.Address.String()).
+				Int("group", group.ID).
+				Err(err).
+				Msg("failed to handle address")
 		}
 	}
 }

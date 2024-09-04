@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -40,7 +41,7 @@ func (p DNSProxy) Listen(ctx context.Context) error {
 		if p.udpConn != nil {
 			err := p.udpConn.Close()
 			if err != nil {
-				log.Printf("failed to close UDP connection: %v", err)
+				log.Error().Err(err).Msg("failed to close UDP connection")
 			}
 		}
 	}()
@@ -53,7 +54,7 @@ func (p DNSProxy) Listen(ctx context.Context) error {
 			buffer := make([]byte, DNSMaxUDPPackageSize)
 			n, clientAddr, err := p.udpConn.ReadFromUDP(buffer)
 			if err != nil {
-				log.Printf("failed to read UDP packet: %v", err)
+				log.Error().Err(err).Msg("failed to read UDP packet")
 				continue
 			}
 
@@ -65,22 +66,20 @@ func (p DNSProxy) Listen(ctx context.Context) error {
 func (p DNSProxy) handleDNSRequest(clientAddr *net.UDPAddr, buffer []byte) {
 	conn, err := net.Dial("udp", p.targetDNSServerAddress)
 	if err != nil {
-		log.Printf("failed to dial target DNS: %v", err)
+		log.Error().Err(err).Msg("failed to dial target DNS")
 		return
 	}
 	defer conn.Close()
 
 	_, err = conn.Write(buffer)
 	if err != nil {
-		// TODO: Error log level
-		log.Printf("failed to send request to target DNS: %v", err)
+		log.Error().Err(err).Msg("failed to send request to target DNS")
 		return
 	}
 
 	err = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	if err != nil {
-		// TODO: Error log level
-		log.Printf("failed to set read deadline: %v", err)
+		log.Error().Err(err).Msg("failed to set read deadline")
 		return
 	}
 
@@ -92,8 +91,7 @@ func (p DNSProxy) handleDNSRequest(clientAddr *net.UDPAddr, buffer []byte) {
 			return
 		}
 
-		// TODO: Error log level
-		log.Printf("failed to read response from target DNS: %v", err)
+		log.Error().Err(err).Msg("failed to read response from target DNS")
 		return
 	}
 
@@ -103,14 +101,12 @@ func (p DNSProxy) handleDNSRequest(clientAddr *net.UDPAddr, buffer []byte) {
 			p.MsgHandler(msg)
 		}
 	} else {
-		// TODO: Warn log level
-		log.Printf("error while parsing DNS message: %v", err)
+		log.Warn().Err(err).Msg("error while parsing DNS message")
 	}
 
 	_, err = p.udpConn.WriteToUDP(response[:n], clientAddr)
 	if err != nil {
-		// TODO: Error log level
-		log.Printf("failed to send DNS message: %v", err)
+		log.Error().Err(err).Msg("failed to send DNS message")
 		return
 	}
 }

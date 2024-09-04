@@ -45,7 +45,7 @@ DomainSearch:
 					Replace: true,
 				})
 				if err != nil {
-					return fmt.Errorf("failed to assign address %s with %s ipset: %w", address, g.ipsetName, err)
+					return fmt.Errorf("failed to assign address: %w", err)
 				}
 				break DomainSearch
 			}
