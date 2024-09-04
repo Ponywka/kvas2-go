@@ -9,12 +9,14 @@ import (
 	"kvas2-go/models"
 	"kvas2-go/pkg/ip-helper"
 
+	"github.com/rs/zerolog/log"
 	"github.com/vishvananda/netlink"
 )
 
 type GroupOptions struct {
 	Enabled bool
 	ipRule  *netlink.Rule
+	ipRoute *netlink.Route
 }
 
 type Group struct {
@@ -75,6 +77,27 @@ func (g *Group) Enable() error {
 	}
 	g.options.ipRule = rule
 
+	iface, err := netlink.LinkByName(g.Interface)
+	if err != nil {
+		log.Warn().Str("interface", g.Interface).Msg("error while getting interface")
+	}
+
+	if iface != nil {
+		route := &netlink.Route{
+			LinkIndex: iface.Attrs().Index,
+			Table:     rule.Table,
+			Dst: &net.IPNet{
+				IP:   []byte{0, 0, 0, 0},
+				Mask: []byte{0, 0, 0, 0},
+			},
+		}
+		err = netlink.RouteAdd(route)
+		if err != nil {
+			return fmt.Errorf("error while adding route: %w", err)
+		}
+		g.options.ipRoute = route
+	}
+
 	defaultTimeout := uint32(300)
 	err = netlink.IpsetDestroy(g.ipsetName)
 	if err != nil && !os.IsNotExist(err) {
@@ -97,9 +120,22 @@ func (g *Group) Disable() error {
 		return nil
 	}
 
-	err := netlink.RuleDel(g.options.ipRule)
-	if err != nil {
-		return fmt.Errorf("error while deleting rule: %w", err)
+	var err error
+
+	if g.options.ipRule != nil {
+		err = netlink.RuleDel(g.options.ipRule)
+		if err != nil {
+			return fmt.Errorf("error while deleting rule: %w", err)
+		}
+		g.options.ipRule = nil
+	}
+
+	if g.options.ipRoute != nil {
+		err = netlink.RouteDel(g.options.ipRoute)
+		if err != nil {
+			return fmt.Errorf("error while deleting route: %w", err)
+		}
+		g.options.ipRule = nil
 	}
 
 	err = netlink.IpsetDestroy(g.ipsetName)
@@ -108,7 +144,6 @@ func (g *Group) Disable() error {
 	}
 
 	g.options.Enabled = false
-	g.options.ipRule = nil
 
 	return nil
 }
