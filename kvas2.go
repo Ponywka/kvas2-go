@@ -13,7 +13,7 @@ import (
 	"kvas2-go/pkg/dns-proxy"
 	"kvas2-go/pkg/iptables-helper"
 
-	"github.com/nadoo/ipset"
+	"github.com/ponywka/ipset"
 )
 
 var (

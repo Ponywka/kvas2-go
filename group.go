@@ -3,7 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
-	"github.com/nadoo/ipset"
+	"github.com/ponywka/ipset"
 	"net"
 	"strconv"
 	"time"
@@ -79,7 +79,7 @@ func (g *Group) Enable() error {
 	if err != nil {
 		return fmt.Errorf("failed to destroy ipset: %w", err)
 	}
-	err = ipset.Create(g.ipsetName)
+	err = ipset.Create(g.ipsetName, ipset.OptType("hash:ip"))
 	if err != nil {
 		return fmt.Errorf("failed to create ipset: %w", err)
 	}
