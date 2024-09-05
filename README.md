@@ -9,7 +9,7 @@ Realized features:
 - [x] IPTables rules for rebind DNS server port [1]
 - [X] IPSet integration
 - [X] IP integration
-- [ ] IPTables rules to IPSet [2]
+- [X] IPTables rules to IPSet [2]
 - [ ] Rule composer (CRUD)
 - [ ] GORM integration
 - [X] Listing of interfaces

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"time"
 
 	"kvas2-go/models"
@@ -55,7 +56,7 @@ DomainSearch:
 	return nil
 }
 
-func (g *Group) Enable() error {
+func (g *Group) Enable(a *App) error {
 	if g.options.Enabled {
 		return nil
 	}
@@ -150,17 +151,75 @@ func (g *Group) Enable() error {
 		return fmt.Errorf("failed to create ipset: %w", err)
 	}
 
+	preroutingChainName := fmt.Sprintf("%sROUTING_%d_PREROUTING", a.Config.ChainPostfix, g.ID)
+
+	err = a.IPTables.ClearChain("mangle", preroutingChainName)
+	if err != nil {
+		return fmt.Errorf("failed to clear chain: %w", err)
+	}
+
+	err = a.IPTables.AppendUnique("mangle", preroutingChainName, "-m", "set", "--match-set", g.ipsetName, "dst", "-j", "MARK", "--set-mark", strconv.Itoa(int(mark)))
+	if err != nil {
+		return fmt.Errorf("failed to create rule: %w", err)
+	}
+
+	err = a.IPTables.AppendUnique("mangle", "PREROUTING", "-j", preroutingChainName)
+	if err != nil {
+		return fmt.Errorf("failed to linking chain: %w", err)
+	}
+
+	postroutingChainName := fmt.Sprintf("%sROUTING_%d_POSTROUTING", a.Config.ChainPostfix, g.ID)
+
+	err = a.IPTables.ClearChain("nat", postroutingChainName)
+	if err != nil {
+		return fmt.Errorf("failed to clear chain: %w", err)
+	}
+
+	err = a.IPTables.AppendUnique("nat", postroutingChainName, "-o", g.Interface, "-j", "MASQUERADE")
+	if err != nil {
+		return fmt.Errorf("failed to create rule: %w", err)
+	}
+
+	err = a.IPTables.AppendUnique("nat", "POSTROUTING", "-j", postroutingChainName)
+	if err != nil {
+		return fmt.Errorf("failed to linking chain: %w", err)
+	}
+
 	g.options.Enabled = true
 
 	return nil
 }
 
-func (g *Group) Disable() error {
+func (g *Group) Disable(a *App) error {
 	if !g.options.Enabled {
 		return nil
 	}
 
 	var err error
+
+	preroutingChainName := fmt.Sprintf("%sROUTING_%d_PREROUTING", a.Config.ChainPostfix, g.ID)
+
+	err = a.IPTables.DeleteIfExists("mangle", "PREROUTING", "-j", preroutingChainName)
+	if err != nil {
+		return fmt.Errorf("failed to unlinking chain: %w", err)
+	}
+
+	err = a.IPTables.ClearAndDeleteChain("mangle", preroutingChainName)
+	if err != nil {
+		return fmt.Errorf("failed to delete chain: %w", err)
+	}
+
+	postroutingChainName := fmt.Sprintf("%sROUTING_%d_POSTROUTING", a.Config.ChainPostfix, g.ID)
+
+	err = a.IPTables.DeleteIfExists("nat", "POSTROUTING", "-j", postroutingChainName)
+	if err != nil {
+		return fmt.Errorf("failed to unlinking chain: %w", err)
+	}
+
+	err = a.IPTables.ClearAndDeleteChain("nat", postroutingChainName)
+	if err != nil {
+		return fmt.Errorf("failed to delete chain: %w", err)
+	}
 
 	if g.options.ipRule != nil {
 		err = netlink.RuleDel(g.options.ipRule)

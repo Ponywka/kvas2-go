@@ -94,7 +94,7 @@ func (a *App) Listen(ctx context.Context) []error {
 	}
 
 	for idx, _ := range a.Groups {
-		err = a.Groups[idx].Enable()
+		err = a.Groups[idx].Enable(a)
 		if err != nil {
 			handleError(fmt.Errorf("failed to enable group: %w", err))
 			return errs
@@ -113,7 +113,7 @@ func (a *App) Listen(ctx context.Context) []error {
 	}
 
 	for idx, _ := range a.Groups {
-		err = a.Groups[idx].Disable()
+		err = a.Groups[idx].Disable(a)
 		if err != nil {
 			handleError(fmt.Errorf("failed to disable group: %w", err))
 			return errs
@@ -146,7 +146,7 @@ func (a *App) AppendGroup(group *models.Group) error {
 	}
 
 	if a.isRunning {
-		err := a.Groups[group.ID].Enable()
+		err := a.Groups[group.ID].Enable(a)
 		if err != nil {
 			return fmt.Errorf("failed to enable appended group: %w", err)
 		}
