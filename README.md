@@ -5,17 +5,19 @@ Better implementation of [KVAS](https://github.com/qzeleza/kvas)
 Realized features:
 - [x] DNS Proxy (UDP)
 - [ ] DNS Proxy (TCP)
-- [x] Records table
-- [x] IPTables rules to remap DNS server [1]
-- [ ] Rule composer
-- [ ] List loading/watching (temporary)
+- [x] Records memory
+- [x] IPTables rules for rebind DNS server port [1]
 - [X] IPSet integration
-- [X] Listing of interfaces
+- [X] IP integration
 - [ ] IPTables rules to IPSet [2]
-- [ ] It is not a concept now... REFACTORING TIME!!!
+- [ ] Rule composer (CRUD)
+- [ ] GORM integration
+- [X] Listing of interfaces
 - [ ] HTTP API
 - [ ] HTTP GUI
-- [ ] Getting readable names of interfaces from Keenetic NDMS
+- [ ] CLI
+- [ ] It is not a concept now... REFACTORING TIME!!!
+- [ ] (Keenetic) Getting readable names of interfaces from Keenetic NDMS
 - [ ] HTTP Auth
 
 [1] Example
