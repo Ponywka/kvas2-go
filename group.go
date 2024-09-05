@@ -7,10 +7,10 @@ import (
 	"time"
 
 	"kvas2-go/models"
-	"kvas2-go/pkg/ip-helper"
 
 	"github.com/rs/zerolog/log"
 	"github.com/vishvananda/netlink"
+	"github.com/vishvananda/netlink/nl"
 )
 
 type GroupOptions struct {
@@ -62,12 +62,52 @@ func (g *Group) Enable() error {
 
 	var err error
 
-	rule := netlink.NewRule()
-	rule.Mark, err = ipHelper.GetUnusedFwMark(1)
-	if err != nil {
-		return fmt.Errorf("error while getting free fwmark: %w", err)
+	markMap := make(map[uint32]struct{})
+	tableMap := map[int]struct{}{
+		0:   {},
+		253: {},
+		254: {},
+		255: {},
 	}
-	rule.Table, err = ipHelper.GetUnusedTable(1)
+	var table int
+	var mark uint32
+
+	rules, err := netlink.RuleList(nl.FAMILY_ALL)
+	if err != nil {
+		return fmt.Errorf("error while getting rules: %w", err)
+	}
+	for _, rule := range rules {
+		markMap[rule.Mark] = struct{}{}
+		tableMap[rule.Table] = struct{}{}
+	}
+
+	routes, err := netlink.RouteListFiltered(nl.FAMILY_ALL, &netlink.Route{}, netlink.RT_FILTER_TABLE)
+	if err != nil {
+		return fmt.Errorf("error while getting routes: %w", err)
+	}
+	for _, route := range routes {
+		tableMap[route.Table] = struct{}{}
+	}
+
+	for {
+		if _, exists := tableMap[table]; exists {
+			table++
+			continue
+		}
+		break
+	}
+
+	for {
+		if _, exists := markMap[mark]; exists {
+			mark++
+			continue
+		}
+		break
+	}
+
+	rule := netlink.NewRule()
+	rule.Mark = mark
+	rule.Table = table
 	if err != nil {
 		return fmt.Errorf("error while getting free table: %w", err)
 	}

@@ -5,13 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strconv"
 	"sync"
 	"time"
 
+	"kvas2-go/dns-proxy"
 	"kvas2-go/models"
-	"kvas2-go/pkg/dns-proxy"
-	"kvas2-go/pkg/iptables-helper"
 
+	"github.com/coreos/go-iptables/iptables"
 	"github.com/rs/zerolog/log"
 )
 
@@ -31,10 +32,10 @@ type Config struct {
 type App struct {
 	Config Config
 
-	DNSProxy     *dnsProxy.DNSProxy
-	DNSOverrider *iptablesHelper.DNSOverrider
-	Records      *Records
-	Groups       map[int]*Group
+	DNSProxy *dnsProxy.DNSProxy
+	IPTables *iptables.IPTables
+	Records  *Records
+	Groups   map[int]*Group
 
 	isRunning bool
 }
@@ -72,13 +73,28 @@ func (a *App) Listen(ctx context.Context) []error {
 	newCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	if err := a.DNSOverrider.Enable(); err != nil {
-		handleError(fmt.Errorf("failed to override DNS: %w", err))
+	chainName := fmt.Sprintf("%sDNSOVERRIDER", a.Config.ChainPostfix)
+
+	err := a.IPTables.ClearChain("nat", chainName)
+	if err != nil {
+		handleError(fmt.Errorf("failed to clear chain: %w", err))
+		return errs
+	}
+
+	err = a.IPTables.AppendUnique("nat", chainName, "-p", "udp", "--dport", "53", "-j", "REDIRECT", "--to-port", strconv.Itoa(int(a.Config.ListenPort)))
+	if err != nil {
+		handleError(fmt.Errorf("failed to create rule: %w", err))
+		return errs
+	}
+
+	err = a.IPTables.InsertUnique("nat", "PREROUTING", 1, "-j", chainName)
+	if err != nil {
+		handleError(fmt.Errorf("failed to linking chain: %w", err))
 		return errs
 	}
 
 	for idx, _ := range a.Groups {
-		err := a.Groups[idx].Enable()
+		err = a.Groups[idx].Enable()
 		if err != nil {
 			handleError(fmt.Errorf("failed to enable group: %w", err))
 			return errs
@@ -97,15 +113,23 @@ func (a *App) Listen(ctx context.Context) []error {
 	}
 
 	for idx, _ := range a.Groups {
-		err := a.Groups[idx].Disable()
+		err = a.Groups[idx].Disable()
 		if err != nil {
 			handleError(fmt.Errorf("failed to disable group: %w", err))
 			return errs
 		}
 	}
 
-	if err := a.DNSOverrider.Disable(); err != nil {
-		handleError(fmt.Errorf("failed to rollback override DNS changes: %w", err))
+	err = a.IPTables.DeleteIfExists("nat", "PREROUTING", "-j", chainName)
+	if err != nil {
+		handleError(fmt.Errorf("failed to unlinking chain: %w", err))
+		return errs
+	}
+
+	err = a.IPTables.ClearAndDeleteChain("nat", chainName)
+	if err != nil {
+		handleError(fmt.Errorf("failed to delete chain: %w", err))
+		return errs
 	}
 
 	return errs
@@ -221,10 +245,11 @@ func New(config Config) (*App, error) {
 
 	app.Records = NewRecords()
 
-	app.DNSOverrider, err = iptablesHelper.NewDNSOverrider(fmt.Sprintf("%sDNSOVERRIDER", app.Config.ChainPostfix), app.Config.ListenPort)
+	ipt, err := iptables.New()
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize DNS overrider: %w", err)
+		return nil, fmt.Errorf("iptables init fail: %w", err)
 	}
+	app.IPTables = ipt
 
 	app.Groups = make(map[int]*Group)
 
