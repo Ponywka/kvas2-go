@@ -27,6 +27,7 @@ type Config struct {
 	IpSetPostfix           string
 	TargetDNSServerAddress string
 	ListenPort             uint16
+	UseSoftwareRouting     bool
 }
 
 type App struct {

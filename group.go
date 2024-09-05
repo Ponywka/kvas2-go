@@ -151,22 +151,57 @@ func (g *Group) Enable(a *App) error {
 		return fmt.Errorf("failed to create ipset: %w", err)
 	}
 
-	//preroutingChainName := fmt.Sprintf("%sROUTING_%d_PREROUTING", a.Config.ChainPostfix, g.ID)
-	//
-	//err = a.IPTables.ClearChain("mangle", preroutingChainName)
-	//if err != nil {
-	//	return fmt.Errorf("failed to clear chain: %w", err)
-	//}
-	//
-	//err = a.IPTables.AppendUnique("mangle", preroutingChainName, "-m", "set", "--match-set", g.ipsetName, "dst", "-j", "MARK", "--set-mark", strconv.Itoa(int(mark)))
-	//if err != nil {
-	//	return fmt.Errorf("failed to create rule: %w", err)
-	//}
-	//
-	//err = a.IPTables.AppendUnique("mangle", "PREROUTING", "-j", preroutingChainName)
-	//if err != nil {
-	//	return fmt.Errorf("failed to linking chain: %w", err)
-	//}
+	if !a.Config.UseSoftwareRouting {
+		chainName := fmt.Sprintf("%sROUTING_%d", a.Config.ChainPostfix, g.ID)
+
+		err = a.IPTables.ClearChain("mangle", chainName)
+		if err != nil {
+			return fmt.Errorf("failed to clear chain: %w", err)
+		}
+
+		for _, iptablesArgs := range [][]string{
+			// Source: https://github.com/qzeleza/kvas/blob/3fdbbd1ace7b57b11bf88d8db3882d94a1d6e01c/opt/etc/ndm/ndm#L194-L206
+			{"-m", "set", "!", "--match-set", g.ipsetName, "dst", "-j", "RETURN"},
+			{"-j", "CONNMARK", "--restore-mark"},
+			{"-m", "mark", "--mark", strconv.Itoa(int(mark)), "-j", "RETURN"},
+			// This command not working
+			// {"--syn", "-j", "MARK", "--set-mark", strconv.Itoa(int(mark))},
+			{"-m", "conntrack", "--ctstate", "NEW", "-j", "MARK", "--set-mark", strconv.Itoa(int(mark))},
+			{"-j", "CONNMARK", "--save-mark"},
+		} {
+			err = a.IPTables.AppendUnique("mangle", chainName, iptablesArgs...)
+			if err != nil {
+				return fmt.Errorf("failed to append rule: %w", err)
+			}
+		}
+
+		err = a.IPTables.AppendUnique("mangle", "PREROUTING", "-m", "set", "--match-set", g.ipsetName, "dst", "-j", chainName)
+		if err != nil {
+			return fmt.Errorf("failed to append rule to PREROUTING: %w", err)
+		}
+
+		err = a.IPTables.AppendUnique("mangle", "OUTPUT", "-m", "set", "--match-set", g.ipsetName, "dst", "-j", chainName)
+		if err != nil {
+			return fmt.Errorf("failed to append rule to OUTPUT: %w", err)
+		}
+	} else {
+		preroutingChainName := fmt.Sprintf("%sROUTING_%d_PREROUTING", a.Config.ChainPostfix, g.ID)
+
+		err = a.IPTables.ClearChain("mangle", preroutingChainName)
+		if err != nil {
+			return fmt.Errorf("failed to clear chain: %w", err)
+		}
+
+		err = a.IPTables.AppendUnique("mangle", preroutingChainName, "-m", "set", "--match-set", g.ipsetName, "dst", "-j", "MARK", "--set-mark", strconv.Itoa(int(mark)))
+		if err != nil {
+			return fmt.Errorf("failed to create rule: %w", err)
+		}
+
+		err = a.IPTables.AppendUnique("mangle", "PREROUTING", "-j", preroutingChainName)
+		if err != nil {
+			return fmt.Errorf("failed to linking chain: %w", err)
+		}
+	}
 
 	postroutingChainName := fmt.Sprintf("%sROUTING_%d_POSTROUTING", a.Config.ChainPostfix, g.ID)
 
@@ -185,47 +220,6 @@ func (g *Group) Enable(a *App) error {
 		return fmt.Errorf("failed to linking chain: %w", err)
 	}
 
-	// Chain name
-	chainName := fmt.Sprintf("%sROUTING_%d", a.Config.ChainPostfix, g.ID)
-
-	// Clear existing chain
-	err = a.IPTables.ClearChain("mangle", chainName)
-	if err != nil {
-		return fmt.Errorf("failed to clear chain: %w", err)
-	}
-
-	// Append rules to the chain
-	ruless := []struct {
-		Args []string
-	}{
-		// Source: https://github.com/qzeleza/kvas/blob/3fdbbd1ace7b57b11bf88d8db3882d94a1d6e01c/opt/etc/ndm/ndm#L194-L206
-		{Args: []string{"-m", "set", "!", "--match-set", g.ipsetName, "dst", "-j", "RETURN"}},
-		{Args: []string{"-j", "CONNMARK", "--restore-mark"}},
-		{Args: []string{"-m", "mark", "--mark", strconv.Itoa(int(mark)), "-j", "RETURN"}},
-		//This command not working
-		//{Args: []string{"--syn", "-j", "MARK", "--set-mark", strconv.Itoa(int(mark))}},
-		{Args: []string{"-m", "conntrack", "--ctstate", "NEW", "-j", "MARK", "--set-mark", strconv.Itoa(int(mark))}},
-		{Args: []string{"-j", "CONNMARK", "--save-mark"}},
-	}
-
-	for _, rule := range ruless {
-		err = a.IPTables.AppendUnique("mangle", chainName, rule.Args...)
-		if err != nil {
-			return fmt.Errorf("failed to append rule: %w", err)
-		}
-	}
-
-	// Append rules to PREROUTING and OUTPUT chains
-	err = a.IPTables.AppendUnique("mangle", "PREROUTING", "-m", "set", "--match-set", g.ipsetName, "dst", "-j", chainName)
-	if err != nil {
-		return fmt.Errorf("failed to append rule to PREROUTING: %w", err)
-	}
-
-	err = a.IPTables.AppendUnique("mangle", "OUTPUT", "-m", "set", "--match-set", g.ipsetName, "dst", "-j", chainName)
-	if err != nil {
-		return fmt.Errorf("failed to append rule to OUTPUT: %w", err)
-	}
-
 	g.options.Enabled = true
 
 	return nil
@@ -238,17 +232,36 @@ func (g *Group) Disable(a *App) error {
 
 	var err error
 
-	//preroutingChainName := fmt.Sprintf("%sROUTING_%d_PREROUTING", a.Config.ChainPostfix, g.ID)
-	//
-	//err = a.IPTables.DeleteIfExists("mangle", "PREROUTING", "-j", preroutingChainName)
-	//if err != nil {
-	//	return fmt.Errorf("failed to unlinking chain: %w", err)
-	//}
-	//
-	//err = a.IPTables.ClearAndDeleteChain("mangle", preroutingChainName)
-	//if err != nil {
-	//	return fmt.Errorf("failed to delete chain: %w", err)
-	//}
+	if !a.Config.UseSoftwareRouting {
+		chainName := fmt.Sprintf("%sROUTING_%d", a.Config.ChainPostfix, g.ID)
+
+		err = a.IPTables.DeleteIfExists("mangle", "PREROUTING", "-m", "set", "--match-set", g.ipsetName, "dst", "-j", chainName)
+		if err != nil {
+			return fmt.Errorf("failed to delete rule to PREROUTING: %w", err)
+		}
+
+		err = a.IPTables.DeleteIfExists("mangle", "OUTPUT", "-m", "set", "--match-set", g.ipsetName, "dst", "-j", chainName)
+		if err != nil {
+			return fmt.Errorf("failed to delete rule to OUTPUT: %w", err)
+		}
+
+		err = a.IPTables.ClearAndDeleteChain("mangle", chainName)
+		if err != nil {
+			return fmt.Errorf("failed to delete chain: %w", err)
+		}
+	} else {
+		preroutingChainName := fmt.Sprintf("%sROUTING_%d_PREROUTING", a.Config.ChainPostfix, g.ID)
+
+		err = a.IPTables.DeleteIfExists("mangle", "PREROUTING", "-j", preroutingChainName)
+		if err != nil {
+			return fmt.Errorf("failed to unlinking chain: %w", err)
+		}
+
+		err = a.IPTables.ClearAndDeleteChain("mangle", preroutingChainName)
+		if err != nil {
+			return fmt.Errorf("failed to delete chain: %w", err)
+		}
+	}
 
 	postroutingChainName := fmt.Sprintf("%sROUTING_%d_POSTROUTING", a.Config.ChainPostfix, g.ID)
 
@@ -258,22 +271,6 @@ func (g *Group) Disable(a *App) error {
 	}
 
 	err = a.IPTables.ClearAndDeleteChain("nat", postroutingChainName)
-	if err != nil {
-		return fmt.Errorf("failed to delete chain: %w", err)
-	}
-
-	chainName := fmt.Sprintf("%sROUTING_%d", a.Config.ChainPostfix, g.ID)
-	err = a.IPTables.DeleteIfExists("mangle", "PREROUTING", "-m", "set", "--match-set", g.ipsetName, "dst", "-j", chainName)
-	if err != nil {
-		return fmt.Errorf("failed to delete rule to PREROUTING: %w", err)
-	}
-
-	err = a.IPTables.DeleteIfExists("mangle", "OUTPUT", "-m", "set", "--match-set", g.ipsetName, "dst", "-j", chainName)
-	if err != nil {
-		return fmt.Errorf("failed to delete rule to OUTPUT: %w", err)
-	}
-
-	err = a.IPTables.ClearAndDeleteChain("mangle", chainName)
 	if err != nil {
 		return fmt.Errorf("failed to delete chain: %w", err)
 	}
