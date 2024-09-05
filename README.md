@@ -16,6 +16,7 @@ Realized features:
 - [ ] HTTP API
 - [ ] HTTP GUI
 - [ ] CLI
+- [ ] (Keenetic) Support for custom interfaces [3]
 - [ ] It is not a concept now... REFACTORING TIME!!!
 - [ ] (Keenetic) Getting readable names of interfaces from Keenetic NDMS
 - [ ] HTTP Auth
@@ -67,4 +68,10 @@ iptables -t mangle -X ${KVAS2_NAME}_ROUTING_PREROUTING
 iptables -t nat -D POSTROUTING -j ${KVAS2_NAME}_ROUTING_POSTROUTING
 iptables -t nat -F ${KVAS2_NAME}_ROUTING_POSTROUTING
 iptables -t nat -X ${KVAS2_NAME}_ROUTING_POSTROUTING
+```
+
+[3] Example
+```bash
+INTERFACE=ovpn_br0
+iptables -A _NDM_SL_FORWARD -o ${INTERFACE} -m state --state NEW -j _NDM_SL_PROTECT
 ```
