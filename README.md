@@ -18,13 +18,7 @@ Realized features:
 - [ ] HTTP API
 - [ ] HTTP GUI
 - [ ] CLI
-- [X] (Keenetic) Support for custom interfaces [1]
+- [X] (Keenetic) Support for custom interfaces
 - [ ] It is not a concept now... REFACTORING TIME!!!
 - [ ] (Keenetic) Getting readable names of interfaces from Keenetic NDMS
 - [ ] HTTP Auth
-
-[1] Example
-```bash
-INTERFACE=ovpn_br0
-iptables -A _NDM_SL_FORWARD -o ${INTERFACE} -m state --state NEW -j _NDM_SL_PROTECT
-```
