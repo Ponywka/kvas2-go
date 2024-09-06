@@ -18,7 +18,7 @@ Realized features:
 - [ ] HTTP API
 - [ ] HTTP GUI
 - [ ] CLI
-- [ ] (Keenetic) Support for custom interfaces [1]
+- [X] (Keenetic) Support for custom interfaces [1]
 - [ ] It is not a concept now... REFACTORING TIME!!!
 - [ ] (Keenetic) Getting readable names of interfaces from Keenetic NDMS
 - [ ] HTTP Auth

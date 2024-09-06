@@ -2,11 +2,13 @@ package main
 
 import (
 	"fmt"
-	netfilterHelper "kvas2-go/netfilter-helper"
 	"net"
 	"time"
 
 	"kvas2-go/models"
+	"kvas2-go/netfilter-helper"
+
+	"github.com/coreos/go-iptables/iptables"
 )
 
 type Group struct {
@@ -14,6 +16,7 @@ type Group struct {
 
 	Enabled bool
 
+	iptables     *iptables.IPTables
 	ipset        *netfilterHelper.IPSet
 	ifaceToIPSet *netfilterHelper.IfaceToIPSet
 }
@@ -47,6 +50,10 @@ func (g *Group) Enable() error {
 			_ = g.Disable()
 		}
 	}()
+
+	if g.FixProtect {
+		g.iptables.AppendUnique("filter", "_NDM_SL_FORWARD", "-o", g.Interface, "-m", "state", "--state", "NEW", "-j", "_NDM_SL_PROTECT")
+	}
 
 	err := g.ipset.Create()
 	if err != nil {
@@ -94,6 +101,7 @@ func (a *App) AddGroup(group *models.Group) error {
 
 	a.Groups[group.ID] = &Group{
 		Group:        group,
+		iptables:     a.NetfilterHelper.IPTables,
 		ipset:        a.NetfilterHelper.IPSet(ipsetName),
 		ifaceToIPSet: a.NetfilterHelper.IfaceToIPSet(fmt.Sprintf("%sROUTING_%d", a.Config.ChainPostfix, group.ID), group.Interface, ipsetName, false),
 	}
