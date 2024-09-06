@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -102,6 +103,55 @@ func (a *App) Listen(ctx context.Context) []error {
 	link := make(chan netlink.LinkUpdate)
 	done := make(chan struct{})
 	netlink.LinkSubscribe(link, done)
+
+	exitListenerLoop := false
+	listener, err := net.Listen("unix", "/opt/var/run/kvas2-go.sock")
+	if err != nil {
+		handleError(fmt.Errorf("error while serve UNIX socket: %v", err))
+	}
+	defer listener.Close()
+
+	go func() {
+		for {
+			if exitListenerLoop {
+				break
+			}
+
+			conn, err := listener.Accept()
+			if err != nil {
+				log.Error().Err(err).Msg("error while listening unix socket")
+			}
+
+			go func(conn net.Conn) {
+				defer conn.Close()
+
+				buf := make([]byte, 1024)
+				n, err := conn.Read(buf)
+				if err != nil {
+					return
+				}
+
+				args := strings.Split(string(buf[:n]), ":")
+				if len(args) == 3 && args[0] == "netfilter.d" {
+					log.Debug().Str("table", args[2]).Msg("netfilter.d event")
+					if a.dnsOverrider.Enabled {
+						err := a.dnsOverrider.PutIPTable(args[2])
+						if err != nil {
+							log.Error().Err(err).Msg("error while fixing iptables after netfilter.d")
+						}
+					}
+					for _, group := range a.Groups {
+						if group.ifaceToIPSet.Enabled {
+							err := group.ifaceToIPSet.PutIPTable(args[2])
+							if err != nil {
+								log.Error().Err(err).Msg("error while fixing iptables after netfilter.d")
+							}
+						}
+					}
+				}
+			}(conn)
+		}
+	}()
 
 Loop:
 	for {

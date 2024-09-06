@@ -15,20 +15,31 @@ type PortRemap struct {
 	Enabled bool
 }
 
+func (r *PortRemap) PutIPTable(table string) error {
+	if table == "all" || table == "nat" {
+		err := r.IPTables.ClearChain("nat", r.ChainName)
+		if err != nil {
+			return fmt.Errorf("failed to clear chain: %w", err)
+		}
+
+		err = r.IPTables.AppendUnique("nat", r.ChainName, "-p", "udp", "--dport", strconv.Itoa(int(r.From)), "-j", "REDIRECT", "--to-port", strconv.Itoa(int(r.To)))
+		if err != nil {
+			return fmt.Errorf("failed to create rule: %w", err)
+		}
+
+		err = r.IPTables.InsertUnique("nat", "PREROUTING", 1, "-j", r.ChainName)
+		if err != nil {
+			return fmt.Errorf("failed to linking chain: %w", err)
+		}
+	}
+
+	return nil
+}
+
 func (r *PortRemap) ForceEnable() error {
-	err := r.IPTables.ClearChain("nat", r.ChainName)
+	err := r.PutIPTable("all")
 	if err != nil {
-		return fmt.Errorf("failed to clear chain: %w", err)
-	}
-
-	err = r.IPTables.AppendUnique("nat", r.ChainName, "-p", "udp", "--dport", strconv.Itoa(int(r.From)), "-j", "REDIRECT", "--to-port", strconv.Itoa(int(r.To)))
-	if err != nil {
-		return fmt.Errorf("failed to create rule: %w", err)
-	}
-
-	err = r.IPTables.InsertUnique("nat", "PREROUTING", 1, "-j", r.ChainName)
-	if err != nil {
-		return fmt.Errorf("failed to linking chain: %w", err)
+		return err
 	}
 
 	r.Enabled = true

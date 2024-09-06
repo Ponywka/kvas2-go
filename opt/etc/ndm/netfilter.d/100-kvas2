@@ -1,0 +1,6 @@
+#!/bin/sh
+SOCKET_PATH="/opt/var/run/kvas2-go.sock"
+if [ ! -S "$SOCKET_PATH" ]; then
+    exit
+fi
+echo -n "netfilter.d:${type}:${table}" | socat - UNIX-CONNECT:"${SOCKET_PATH}"
