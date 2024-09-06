@@ -5,14 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"strconv"
 	"sync"
 	"time"
 
 	"kvas2-go/dns-proxy"
 	"kvas2-go/models"
+	"kvas2-go/netfilter-helper"
 
-	"github.com/coreos/go-iptables/iptables"
 	"github.com/rs/zerolog/log"
 )
 
@@ -33,12 +32,13 @@ type Config struct {
 type App struct {
 	Config Config
 
-	DNSProxy *dnsProxy.DNSProxy
-	IPTables *iptables.IPTables
-	Records  *Records
-	Groups   map[int]*Group
+	DNSProxy        *dnsProxy.DNSProxy
+	NetfilterHelper *netfilterHelper.NetfilterHelper
+	Records         *Records
+	Groups          map[int]*Group
 
-	isRunning bool
+	isRunning    bool
+	dnsOverrider *netfilterHelper.PortRemap
 }
 
 func (a *App) Listen(ctx context.Context) []error {
@@ -60,6 +60,13 @@ func (a *App) Listen(ctx context.Context) []error {
 		errs = append(errs, err)
 		once.Do(func() { close(isError) })
 	}
+	handleErrors := func(errs2 []error) {
+		errsMu.Lock()
+		defer errsMu.Unlock()
+
+		errs = append(errs, errs2...)
+		once.Do(func() { close(isError) })
+	}
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -74,28 +81,11 @@ func (a *App) Listen(ctx context.Context) []error {
 	newCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	chainName := fmt.Sprintf("%sDNSOVERRIDER", a.Config.ChainPostfix)
-
-	err := a.IPTables.ClearChain("nat", chainName)
-	if err != nil {
-		handleError(fmt.Errorf("failed to clear chain: %w", err))
-		return errs
-	}
-
-	err = a.IPTables.AppendUnique("nat", chainName, "-p", "udp", "--dport", "53", "-j", "REDIRECT", "--to-port", strconv.Itoa(int(a.Config.ListenPort)))
-	if err != nil {
-		handleError(fmt.Errorf("failed to create rule: %w", err))
-		return errs
-	}
-
-	err = a.IPTables.InsertUnique("nat", "PREROUTING", 1, "-j", chainName)
-	if err != nil {
-		handleError(fmt.Errorf("failed to linking chain: %w", err))
-		return errs
-	}
+	a.dnsOverrider = a.NetfilterHelper.PortRemap(fmt.Sprintf("%sDNSOVERRIDER", a.Config.ChainPostfix), 53, a.Config.ListenPort)
+	err := a.dnsOverrider.Enable()
 
 	for idx, _ := range a.Groups {
-		err = a.Groups[idx].Enable(a)
+		err = a.Groups[idx].Enable()
 		if err != nil {
 			handleError(fmt.Errorf("failed to enable group: %w", err))
 			return errs
@@ -113,47 +103,19 @@ func (a *App) Listen(ctx context.Context) []error {
 	case <-isError:
 	}
 
+	errs2 := a.dnsOverrider.Disable()
+	if errs2 != nil {
+		handleErrors(errs2)
+	}
+
 	for idx, _ := range a.Groups {
-		err = a.Groups[idx].Disable(a)
-		if err != nil {
-			handleError(fmt.Errorf("failed to disable group: %w", err))
-			return errs
+		errs2 = a.Groups[idx].Disable()
+		if errs2 != nil {
+			handleErrors(errs2)
 		}
-	}
-
-	err = a.IPTables.DeleteIfExists("nat", "PREROUTING", "-j", chainName)
-	if err != nil {
-		handleError(fmt.Errorf("failed to unlinking chain: %w", err))
-		return errs
-	}
-
-	err = a.IPTables.ClearAndDeleteChain("nat", chainName)
-	if err != nil {
-		handleError(fmt.Errorf("failed to delete chain: %w", err))
-		return errs
 	}
 
 	return errs
-}
-
-func (a *App) AppendGroup(group *models.Group) error {
-	if _, exists := a.Groups[group.ID]; exists {
-		return ErrGroupIDConflict
-	}
-
-	a.Groups[group.ID] = &Group{
-		Group:     group,
-		ipsetName: fmt.Sprintf("%s%d", a.Config.IpSetPostfix, group.ID),
-	}
-
-	if a.isRunning {
-		err := a.Groups[group.ID].Enable(a)
-		if err != nil {
-			return fmt.Errorf("failed to enable appended group: %w", err)
-		}
-	}
-
-	return nil
 }
 
 func (a *App) ListInterfaces() ([]net.Interface, error) {
@@ -246,11 +208,11 @@ func New(config Config) (*App, error) {
 
 	app.Records = NewRecords()
 
-	ipt, err := iptables.New()
+	nh, err := netfilterHelper.New()
 	if err != nil {
-		return nil, fmt.Errorf("iptables init fail: %w", err)
+		return nil, fmt.Errorf("netfilter helper init fail: %w", err)
 	}
-	app.IPTables = ipt
+	app.NetfilterHelper = nh
 
 	app.Groups = make(map[int]*Group)
 
