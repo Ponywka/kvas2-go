@@ -70,14 +70,14 @@ func (g *Group) Disable() []error {
 		return nil
 	}
 
-	err := g.ipset.Destroy()
-	if err != nil {
-		errs = append(errs, err)
-	}
-
 	errs2 := g.ifaceToIPSet.Disable()
 	if errs2 != nil {
 		errs = append(errs, errs2...)
+	}
+
+	err := g.ipset.Destroy()
+	if err != nil {
+		errs = append(errs, err)
 	}
 
 	g.Enabled = false
