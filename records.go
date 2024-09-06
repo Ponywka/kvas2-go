@@ -243,6 +243,22 @@ func (r *Records) PutARecord(domainName string, addr net.IP, ttl time.Duration) 
 	record.ARecords = append(record.ARecords, NewARecord(addr, time.Now().Add(ttl)))
 }
 
+func (r *Records) ListKnownDomains() []string {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	domains := make([]string, 0)
+	for name, record := range r.Records {
+		if record.Cleanup() {
+			delete(r.Records, name)
+			continue
+		}
+		domains = append(domains, name)
+	}
+
+	return domains
+}
+
 func (r *Records) Cleanup() {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
