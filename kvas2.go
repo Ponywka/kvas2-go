@@ -13,6 +13,7 @@ import (
 	"kvas2-go/netfilter-helper"
 
 	"github.com/rs/zerolog/log"
+	"github.com/vishvananda/netlink"
 )
 
 var (
@@ -98,10 +99,53 @@ func (a *App) Listen(ctx context.Context) []error {
 		}
 	}()
 
-	select {
-	case <-ctx.Done():
-	case <-isError:
+	link := make(chan netlink.LinkUpdate)
+	done := make(chan struct{})
+	netlink.LinkSubscribe(link, done)
+
+Loop:
+	for {
+		select {
+		case event := <-link:
+			switch event.Change {
+			case 0x00000001:
+				log.Debug().
+					Str("interface", event.Link.Attrs().Name).
+					Str("operstatestr", event.Attrs().OperState.String()).
+					Int("operstate", int(event.Attrs().OperState)).
+					Msg("interface change")
+				if event.Attrs().OperState != netlink.OperDown {
+					for _, group := range a.Groups {
+						if group.Interface == event.Link.Attrs().Name {
+							err = group.ifaceToIPSet.IfaceHandle()
+							if err != nil {
+								log.Error().Int("group", group.ID).Err(err).Msg("error while handling interface up")
+							}
+						}
+					}
+				}
+			case 0xFFFFFFFF:
+				switch event.Header.Type {
+				case 16:
+					log.Debug().
+						Str("interface", event.Link.Attrs().Name).
+						Int("type", int(event.Header.Type)).
+						Msg("interface add")
+				case 17:
+					log.Debug().
+						Str("interface", event.Link.Attrs().Name).
+						Int("type", int(event.Header.Type)).
+						Msg("interface del")
+				}
+			}
+		case <-ctx.Done():
+			break Loop
+		case <-isError:
+			break Loop
+		}
 	}
+
+	close(done)
 
 	errs2 := a.dnsOverrider.Disable()
 	if errs2 != nil {

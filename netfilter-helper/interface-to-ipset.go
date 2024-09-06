@@ -25,17 +25,40 @@ type IfaceToIPSet struct {
 	ipRoute *netlink.Route
 }
 
+func (r *IfaceToIPSet) IfaceHandle() error {
+	// Find interface
+	iface, err := netlink.LinkByName(r.IfaceName)
+	if err != nil {
+		log.Warn().Str("interface", r.IfaceName).Err(err).Msg("error while getting interface")
+	}
+
+	// Mapping iface with table
+	if iface != nil {
+		route := &netlink.Route{
+			LinkIndex: iface.Attrs().Index,
+			Table:     r.table,
+			Dst:       &net.IPNet{IP: []byte{0, 0, 0, 0}, Mask: []byte{0, 0, 0, 0}},
+		}
+		// Delete rule if exists
+		err = netlink.RouteDel(route)
+		if err != nil {
+			log.Warn().Str("interface", r.IfaceName).Err(err).Msg("error while deleting route")
+		}
+		err = netlink.RouteAdd(route)
+		if err != nil {
+			return fmt.Errorf("error while mapping iface with table: %w", err)
+		}
+		r.ipRoute = route
+	}
+
+	return nil
+}
+
 func (r *IfaceToIPSet) ForceEnable() error {
 	// Release used mark and table
 	r.Disable()
 	r.mark = 0
 	r.table = 0
-
-	// Find interface
-	iface, err := netlink.LinkByName(r.IfaceName)
-	if err != nil {
-		log.Warn().Str("interface", r.IfaceName).Msg("error while getting interface")
-	}
 
 	// Find unused mark and table
 	markMap := make(map[uint32]struct{})
@@ -152,18 +175,9 @@ func (r *IfaceToIPSet) ForceEnable() error {
 	}
 	r.ipRule = rule
 
-	// Mapping iface with table
-	if iface != nil {
-		route := &netlink.Route{
-			LinkIndex: iface.Attrs().Index,
-			Table:     rule.Table,
-			Dst:       &net.IPNet{IP: []byte{0, 0, 0, 0}, Mask: []byte{0, 0, 0, 0}},
-		}
-		err = netlink.RouteAdd(route)
-		if err != nil {
-			return fmt.Errorf("error while mapping iface with table: %w", err)
-		}
-		r.ipRoute = route
+	err = r.IfaceHandle()
+	if err != nil {
+		return nil
 	}
 
 	return nil

@@ -10,7 +10,7 @@ Realized features:
 - [X] IPSet integration
 - [X] IP integration
 - [X] IPTables rules to IPSet
-- [ ] Catch interface up/down
+- [X] Catch interface up/down
 - [ ] Catch `netfilter.d` event
 - [ ] Rule composer (CRUD)
 - [ ] GORM integration
