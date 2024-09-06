@@ -84,8 +84,8 @@ func (a *App) Listen(ctx context.Context) []error {
 	a.dnsOverrider = a.NetfilterHelper.PortRemap(fmt.Sprintf("%sDNSOVERRIDER", a.Config.ChainPostfix), 53, a.Config.ListenPort)
 	err := a.dnsOverrider.Enable()
 
-	for idx, _ := range a.Groups {
-		err = a.Groups[idx].Enable()
+	for _, group := range a.Groups {
+		err = group.Enable()
 		if err != nil {
 			handleError(fmt.Errorf("failed to enable group: %w", err))
 			return errs
@@ -108,8 +108,8 @@ func (a *App) Listen(ctx context.Context) []error {
 		handleErrors(errs2)
 	}
 
-	for idx, _ := range a.Groups {
-		errs2 = a.Groups[idx].Disable()
+	for _, group := range a.Groups {
+		errs2 = group.Disable()
 		if errs2 != nil {
 			handleErrors(errs2)
 		}

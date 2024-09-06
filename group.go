@@ -82,7 +82,7 @@ func (g *Group) Disable() []error {
 
 	g.Enabled = false
 
-	return nil
+	return errs
 }
 
 func (a *App) AddGroup(group *models.Group) error {
