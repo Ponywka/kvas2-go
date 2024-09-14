@@ -63,7 +63,7 @@ func (r *IfaceToIPSet) PutIPTable(table string) error {
 		}
 	} else {
 		if table == "all" || table == "mangle" {
-			preroutingChainName := fmt.Sprintf("%s_PREROUTING", r.ChainName)
+			preroutingChainName := fmt.Sprintf("%s_PRR", r.ChainName)
 
 			err = r.IPTables.ClearChain("mangle", preroutingChainName)
 			if err != nil {
@@ -83,7 +83,7 @@ func (r *IfaceToIPSet) PutIPTable(table string) error {
 	}
 
 	if table == "all" || table == "nat" {
-		postroutingChainName := fmt.Sprintf("%s_POSTROUTING", r.ChainName)
+		postroutingChainName := fmt.Sprintf("%s_POR", r.ChainName)
 
 		err = r.IPTables.ClearChain("nat", postroutingChainName)
 		if err != nil {
@@ -221,7 +221,7 @@ func (r *IfaceToIPSet) Disable() []error {
 			errs = append(errs, fmt.Errorf("failed to delete chain: %w", err))
 		}
 	} else {
-		preroutingChainName := fmt.Sprintf("%s_PREROUTING", r.ChainName)
+		preroutingChainName := fmt.Sprintf("%s_PRR", r.ChainName)
 
 		err = r.IPTables.DeleteIfExists("mangle", "PREROUTING", "-j", preroutingChainName)
 		if err != nil {
@@ -234,7 +234,7 @@ func (r *IfaceToIPSet) Disable() []error {
 		}
 	}
 
-	postroutingChainName := fmt.Sprintf("%s_POSTROUTING", r.ChainName)
+	postroutingChainName := fmt.Sprintf("%s_POR", r.ChainName)
 
 	err = r.IPTables.DeleteIfExists("nat", "POSTROUTING", "-j", postroutingChainName)
 	if err != nil {

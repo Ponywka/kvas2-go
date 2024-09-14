@@ -34,13 +34,13 @@ type Config struct {
 type App struct {
 	Config Config
 
-	DNSProxy        *dnsProxy.DNSProxy
-	NetfilterHelper *netfilterHelper.NetfilterHelper
-	Records         *Records
-	Groups          map[int]*Group
+	DNSProxy         *dnsProxy.DNSProxy
+	NetfilterHelper4 *netfilterHelper.NetfilterHelper
+	Records          *Records
+	Groups           map[int]*Group
 
-	isRunning    bool
-	dnsOverrider *netfilterHelper.PortRemap
+	isRunning     bool
+	dnsOverrider4 *netfilterHelper.PortRemap
 }
 
 func (a *App) Listen(ctx context.Context) []error {
@@ -83,8 +83,8 @@ func (a *App) Listen(ctx context.Context) []error {
 	newCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	a.dnsOverrider = a.NetfilterHelper.PortRemap(fmt.Sprintf("%sDNSOVERRIDER", a.Config.ChainPostfix), 53, a.Config.ListenPort)
-	err := a.dnsOverrider.Enable()
+	a.dnsOverrider4 = a.NetfilterHelper4.PortRemap(fmt.Sprintf("%sDNSOR", a.Config.ChainPostfix), 53, a.Config.ListenPort)
+	err := a.dnsOverrider4.Enable()
 
 	for _, group := range a.Groups {
 		err = group.Enable()
@@ -134,8 +134,8 @@ func (a *App) Listen(ctx context.Context) []error {
 				args := strings.Split(string(buf[:n]), ":")
 				if len(args) == 3 && args[0] == "netfilter.d" {
 					log.Debug().Str("table", args[2]).Msg("netfilter.d event")
-					if a.dnsOverrider.Enabled {
-						err := a.dnsOverrider.PutIPTable(args[2])
+					if a.dnsOverrider4.Enabled {
+						err := a.dnsOverrider4.PutIPTable(args[2])
 						if err != nil {
 							log.Error().Err(err).Msg("error while fixing iptables after netfilter.d")
 						}
@@ -197,7 +197,7 @@ Loop:
 
 	close(done)
 
-	errs2 := a.dnsOverrider.Disable()
+	errs2 := a.dnsOverrider4.Disable()
 	if errs2 != nil {
 		handleErrors(errs2)
 	}
@@ -302,11 +302,11 @@ func New(config Config) (*App, error) {
 
 	app.Records = NewRecords()
 
-	nh, err := netfilterHelper.New()
+	nh4, err := netfilterHelper.New(false)
 	if err != nil {
 		return nil, fmt.Errorf("netfilter helper init fail: %w", err)
 	}
-	app.NetfilterHelper = nh
+	app.NetfilterHelper4 = nh4
 
 	app.Groups = make(map[int]*Group)
 

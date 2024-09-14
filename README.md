@@ -22,3 +22,4 @@ Realized features:
 - [ ] It is not a concept now... REFACTORING TIME!!!
 - [ ] (Keenetic) Getting readable names of interfaces from Keenetic NDMS
 - [ ] HTTP Auth
+- [ ] IPv6 support

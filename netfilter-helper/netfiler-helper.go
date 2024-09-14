@@ -9,8 +9,15 @@ type NetfilterHelper struct {
 	IPTables *iptables.IPTables
 }
 
-func New() (*NetfilterHelper, error) {
-	ipt, err := iptables.New()
+func New(isIPv6 bool) (*NetfilterHelper, error) {
+	var proto iptables.Protocol
+	if !isIPv6 {
+		proto = iptables.ProtocolIPv4
+	} else {
+		proto = iptables.ProtocolIPv6
+	}
+
+	ipt, err := iptables.New(iptables.IPFamily(proto))
 	if err != nil {
 		return nil, fmt.Errorf("iptables init fail: %w", err)
 	}
