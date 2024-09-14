@@ -195,6 +195,8 @@ Loop:
 		}
 	}
 
+	exitListenerLoop = true
+
 	close(done)
 
 	errs2 := a.dnsOverrider4.Disable()
