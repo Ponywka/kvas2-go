@@ -41,7 +41,7 @@ func (r *Records) cleanupARecords(now time.Time) {
 	for name, aRecords := range r.ARecords {
 		i := 0
 		for _, aRecord := range aRecords {
-			if aRecord.Deadline.After(now) {
+			if now.After(aRecord.Deadline) {
 				continue
 			}
 			aRecords[i] = aRecord
@@ -56,7 +56,7 @@ func (r *Records) cleanupARecords(now time.Time) {
 
 func (r *Records) cleanupCNameRecords(now time.Time) {
 	for name, record := range r.CNameRecords {
-		if record.Deadline.After(now) {
+		if now.After(record.Deadline) {
 			delete(r.CNameRecords, name)
 		}
 	}
@@ -76,7 +76,7 @@ func (r *Records) getAliasedDomain(now time.Time, domainName string) string {
 		if !ok {
 			break
 		}
-		if cname.Deadline.After(now) {
+		if now.After(cname.Deadline) {
 			delete(r.CNameRecords, domainName)
 			break
 		}
@@ -93,7 +93,7 @@ func (r *Records) getActualARecords(now time.Time, domainName string) []*ARecord
 
 	i := 0
 	for _, aRecord := range aRecords {
-		if aRecord.Deadline.After(now) {
+		if now.After(aRecord.Deadline) {
 			continue
 		}
 		aRecords[i] = aRecord
