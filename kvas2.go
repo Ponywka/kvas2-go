@@ -297,6 +297,11 @@ func (a *App) SyncGroup(group *Group) error {
 				Str("address", ip.String()).
 				Err(err).
 				Msg("failed to delete address")
+		} else {
+			log.Trace().
+				Str("address", ip.String()).
+				Err(err).
+				Msg("add address")
 		}
 	}
 
@@ -338,6 +343,7 @@ func (a *App) processARecord(aRecord dnsProxy.Address) {
 
 	names := a.Records.GetCNameRecords(aRecord.Name.String(), true)
 	for _, group := range a.Groups {
+	Domain:
 		for _, domain := range group.Domains {
 			if !domain.IsEnabled() {
 				continue
@@ -352,7 +358,15 @@ func (a *App) processARecord(aRecord dnsProxy.Address) {
 						Str("address", aRecord.Address.String()).
 						Err(err).
 						Msg("failed to add address")
+				} else {
+					log.Trace().
+						Str("address", aRecord.Address.String()).
+						Str("aRecordDomain", aRecord.Name.String()).
+						Str("cNameDomain", name).
+						Err(err).
+						Msg("add address")
 				}
+				break Domain
 			}
 		}
 	}
@@ -371,6 +385,40 @@ func (a *App) processCNameRecord(cNameRecord dnsProxy.CName) {
 	}
 
 	a.Records.AddCNameRecord(cNameRecord.Name.String(), cNameRecord.CName.String(), ttlDuration)
+
+	// TODO: Optimization
+	now := time.Now()
+	aRecords := a.Records.GetARecords(cNameRecord.Name.String())
+	names := a.Records.GetCNameRecords(cNameRecord.Name.String(), true)
+	for _, group := range a.Groups {
+	Domain:
+		for _, domain := range group.Domains {
+			if !domain.IsEnabled() {
+				continue
+			}
+			for _, name := range names {
+				if !domain.IsMatch(name) {
+					continue
+				}
+				for _, aRecord := range aRecords {
+					err := group.AddIPv4(aRecord.Address, now.Sub(aRecord.Deadline))
+					if err != nil {
+						log.Error().
+							Str("address", aRecord.Address.String()).
+							Err(err).
+							Msg("failed to add address")
+					} else {
+						log.Trace().
+							Str("address", aRecord.Address.String()).
+							Str("cNameDomain", name).
+							Err(err).
+							Msg("add address")
+					}
+				}
+				continue Domain
+			}
+		}
+	}
 }
 
 func (a *App) handleRecord(rr dnsProxy.ResourceRecord) {
