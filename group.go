@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"net"
 	"time"
 
@@ -21,16 +20,12 @@ type Group struct {
 	ifaceToIPSet *netfilterHelper.IfaceToIPSet
 }
 
-func (g *Group) HandleIPv4(names []string, address net.IP, ttl time.Duration) error {
-	if !g.Enabled {
-		return nil
-	}
-
+func (g *Group) HandleIPv4(relatedDomains []string, address net.IP, ttl time.Duration) error {
 	for _, domain := range g.Domains {
 		if !domain.IsEnabled() {
 			continue
 		}
-		for _, name := range names {
+		for _, name := range relatedDomains {
 			if domain.IsMatch(name) {
 				ttlSeconds := uint32(ttl.Seconds())
 				return g.ipset.Add(address, &ttlSeconds)
@@ -90,21 +85,4 @@ func (g *Group) Disable() []error {
 	g.Enabled = false
 
 	return errs
-}
-
-func (a *App) AddGroup(group *models.Group) error {
-	if _, exists := a.Groups[group.ID]; exists {
-		return ErrGroupIDConflict
-	}
-
-	ipsetName := fmt.Sprintf("%s%d", a.Config.IpSetPostfix, group.ID)
-
-	a.Groups[group.ID] = &Group{
-		Group:        group,
-		iptables:     a.NetfilterHelper.IPTables,
-		ipset:        a.NetfilterHelper.IPSet(ipsetName),
-		ifaceToIPSet: a.NetfilterHelper.IfaceToIPSet(fmt.Sprintf("%sROUTING_%d", a.Config.ChainPostfix, group.ID), group.Interface, ipsetName, false),
-	}
-
-	return nil
 }

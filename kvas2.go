@@ -212,6 +212,61 @@ Loop:
 	return errs
 }
 
+func (a *App) AddGroup(group *models.Group) error {
+	if _, exists := a.Groups[group.ID]; exists {
+		return ErrGroupIDConflict
+	}
+
+	ipsetName := fmt.Sprintf("%s%d", a.Config.IpSetPostfix, group.ID)
+
+	grp := &Group{
+		Group:        group,
+		iptables:     a.NetfilterHelper4.IPTables,
+		ipset:        a.NetfilterHelper4.IPSet(ipsetName),
+		ifaceToIPSet: a.NetfilterHelper4.IfaceToIPSet(fmt.Sprintf("%sR_%d", a.Config.ChainPostfix, group.ID), group.Interface, ipsetName, false),
+	}
+	a.Groups[group.ID] = grp
+
+	domains := a.Records.ListKnownDomains()
+	processedDomains := make(map[string]struct{})
+	for _, domainName := range domains {
+		if _, exists := processedDomains[domainName]; exists {
+			continue
+		}
+
+		for _, domain := range group.Domains {
+			if !domain.IsMatch(domainName) {
+				continue
+			}
+
+			cnames := a.Records.GetCNameRecords(domainName, true)
+			for _, cname := range cnames {
+				processedDomains[cname] = struct{}{}
+			}
+
+			if len(cnames) == 0 {
+				break
+			}
+
+			addresses := a.Records.GetARecords(domainName)
+			for _, address := range addresses {
+				err := grp.HandleIPv4(cnames, address.Address, time.Now().Sub(address.Deadline))
+				if err != nil {
+					log.Error().
+						Str("name", domainName).
+						Str("address", address.Address.String()).
+						Int("group", group.ID).
+						Err(err).
+						Msg("failed to handle address")
+				}
+			}
+			break
+		}
+	}
+
+	return nil
+}
+
 func (a *App) ListInterfaces() ([]net.Interface, error) {
 	interfaceNames := make([]net.Interface, 0)
 
@@ -243,9 +298,10 @@ func (a *App) processARecord(aRecord dnsProxy.Address) {
 		ttlDuration = a.Config.MinimalTTL
 	}
 
-	a.Records.PutARecord(aRecord.Name.String(), aRecord.Address, ttlDuration)
+	a.Records.AddARecord(aRecord.Name.String(), aRecord.Address, ttlDuration)
 
-	names := append([]string{aRecord.Name.String()}, a.Records.GetCNameRecords(aRecord.Name.String(), true, true)...)
+	// TODO: Optimize
+	names := a.Records.GetCNameRecords(aRecord.Name.String(), true)
 	for _, group := range a.Groups {
 		err := group.HandleIPv4(names, aRecord.Address, ttlDuration)
 		if err != nil {
@@ -265,7 +321,7 @@ func (a *App) processCNameRecord(cNameRecord dnsProxy.CName) {
 		ttlDuration = a.Config.MinimalTTL
 	}
 
-	a.Records.PutCNameRecord(cNameRecord.Name.String(), cNameRecord.CName.String(), ttlDuration)
+	a.Records.AddCNameRecord(cNameRecord.Name.String(), cNameRecord.CName.String(), ttlDuration)
 }
 
 func (a *App) handleRecord(rr dnsProxy.ResourceRecord) {
