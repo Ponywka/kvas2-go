@@ -20,20 +20,17 @@ type Group struct {
 	ifaceToIPSet *netfilterHelper.IfaceToIPSet
 }
 
-func (g *Group) HandleIPv4(relatedDomains []string, address net.IP, ttl time.Duration) error {
-	for _, domain := range g.Domains {
-		if !domain.IsEnabled() {
-			continue
-		}
-		for _, name := range relatedDomains {
-			if domain.IsMatch(name) {
-				ttlSeconds := uint32(ttl.Seconds())
-				return g.ipset.Add(address, &ttlSeconds)
-			}
-		}
-	}
+func (g *Group) AddIPv4(address net.IP, ttl time.Duration) error {
+	ttlSeconds := uint32(ttl.Seconds())
+	return g.ipset.Add(address, &ttlSeconds)
+}
 
-	return nil
+func (g *Group) DelIPv4(address net.IP) error {
+	return g.ipset.Del(address)
+}
+
+func (g *Group) ListIPv4() (map[string]*uint32, error) {
+	return g.ipset.List()
 }
 
 func (g *Group) Enable() error {
@@ -50,12 +47,7 @@ func (g *Group) Enable() error {
 		g.iptables.AppendUnique("filter", "_NDM_SL_FORWARD", "-o", g.Interface, "-m", "state", "--state", "NEW", "-j", "_NDM_SL_PROTECT")
 	}
 
-	err := g.ipset.Create()
-	if err != nil {
-		return err
-	}
-
-	err = g.ifaceToIPSet.Enable()
+	err := g.ifaceToIPSet.Enable()
 	if err != nil {
 		return err
 	}
@@ -75,11 +67,6 @@ func (g *Group) Disable() []error {
 	errs2 := g.ifaceToIPSet.Disable()
 	if errs2 != nil {
 		errs = append(errs, errs2...)
-	}
-
-	err := g.ipset.Destroy()
-	if err != nil {
-		errs = append(errs, err)
 	}
 
 	g.Enabled = false

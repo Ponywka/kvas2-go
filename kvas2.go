@@ -218,49 +218,85 @@ func (a *App) AddGroup(group *models.Group) error {
 	}
 
 	ipsetName := fmt.Sprintf("%s%d", a.Config.IpSetPostfix, group.ID)
+	ipset, err := a.NetfilterHelper4.IPSet(ipsetName)
+	if err != nil {
+		return fmt.Errorf("failed to initialize ipset: %w", err)
+	}
 
 	grp := &Group{
 		Group:        group,
 		iptables:     a.NetfilterHelper4.IPTables,
-		ipset:        a.NetfilterHelper4.IPSet(ipsetName),
+		ipset:        ipset,
 		ifaceToIPSet: a.NetfilterHelper4.IfaceToIPSet(fmt.Sprintf("%sR_%d", a.Config.ChainPostfix, group.ID), group.Interface, ipsetName, false),
 	}
 	a.Groups[group.ID] = grp
+	return a.SyncGroup(grp)
+}
 
-	domains := a.Records.ListKnownDomains()
+func (a *App) SyncGroup(group *Group) error {
 	processedDomains := make(map[string]struct{})
-	for _, domainName := range domains {
-		if _, exists := processedDomains[domainName]; exists {
+	newIpsetAddressesMap := make(map[string]time.Duration)
+	now := time.Now()
+
+	oldIpsetAddresses, err := group.ListIPv4()
+	if err != nil {
+		return fmt.Errorf("failed to get old ipset list: %w", err)
+	}
+
+	knownDomains := a.Records.ListKnownDomains()
+	for _, domain := range group.Domains {
+		if !domain.IsEnabled() {
 			continue
 		}
 
-		for _, domain := range group.Domains {
+		for _, domainName := range knownDomains {
 			if !domain.IsMatch(domainName) {
 				continue
 			}
 
 			cnames := a.Records.GetCNameRecords(domainName, true)
+			if len(cnames) == 0 {
+				continue
+			}
 			for _, cname := range cnames {
 				processedDomains[cname] = struct{}{}
 			}
 
-			if len(cnames) == 0 {
-				break
-			}
-
 			addresses := a.Records.GetARecords(domainName)
 			for _, address := range addresses {
-				err := grp.HandleIPv4(cnames, address.Address, time.Now().Sub(address.Deadline))
-				if err != nil {
-					log.Error().
-						Str("name", domainName).
-						Str("address", address.Address.String()).
-						Int("group", group.ID).
-						Err(err).
-						Msg("failed to handle address")
+				ttl := now.Sub(address.Deadline)
+				if oldTTL, ok := newIpsetAddressesMap[string(address.Address)]; !ok || ttl > oldTTL {
+					newIpsetAddressesMap[string(address.Address)] = ttl
 				}
 			}
-			break
+		}
+	}
+
+	for addr, ttl := range newIpsetAddressesMap {
+		if _, exists := oldIpsetAddresses[addr]; exists {
+			continue
+		}
+		ip := net.IP(addr)
+		err = group.AddIPv4(ip, ttl)
+		if err != nil {
+			log.Error().
+				Str("address", ip.String()).
+				Err(err).
+				Msg("failed to add address")
+		}
+	}
+
+	for addr, _ := range oldIpsetAddresses {
+		if _, exists := newIpsetAddressesMap[addr]; exists {
+			continue
+		}
+		ip := net.IP(addr)
+		err = group.DelIPv4(ip)
+		if err != nil {
+			log.Error().
+				Str("address", ip.String()).
+				Err(err).
+				Msg("failed to delete address")
 		}
 	}
 
@@ -300,22 +336,32 @@ func (a *App) processARecord(aRecord dnsProxy.Address) {
 
 	a.Records.AddARecord(aRecord.Name.String(), aRecord.Address, ttlDuration)
 
-	// TODO: Optimize
 	names := a.Records.GetCNameRecords(aRecord.Name.String(), true)
 	for _, group := range a.Groups {
-		err := group.HandleIPv4(names, aRecord.Address, ttlDuration)
-		if err != nil {
-			log.Error().
-				Str("name", aRecord.Name.String()).
-				Str("address", aRecord.Address.String()).
-				Int("group", group.ID).
-				Err(err).
-				Msg("failed to handle address")
+		for _, domain := range group.Domains {
+			for _, name := range names {
+				if !domain.IsMatch(name) {
+					continue
+				}
+				err := group.AddIPv4(aRecord.Address, ttlDuration)
+				if err != nil {
+					log.Error().
+						Str("address", aRecord.Address.String()).
+						Err(err).
+						Msg("failed to add address")
+				}
+			}
 		}
 	}
 }
 
 func (a *App) processCNameRecord(cNameRecord dnsProxy.CName) {
+	log.Trace().
+		Str("name", cNameRecord.Name.String()).
+		Str("cname", cNameRecord.CName.String()).
+		Int("ttl", int(cNameRecord.TTL)).
+		Msg("processing cname record")
+
 	ttlDuration := time.Duration(cNameRecord.TTL) * time.Second
 	if ttlDuration < a.Config.MinimalTTL {
 		ttlDuration = a.Config.MinimalTTL
@@ -327,6 +373,7 @@ func (a *App) processCNameRecord(cNameRecord dnsProxy.CName) {
 func (a *App) handleRecord(rr dnsProxy.ResourceRecord) {
 	switch v := rr.(type) {
 	case dnsProxy.Address:
+		// TODO: Optimize equals domain A records
 		a.processARecord(v)
 	case dnsProxy.CName:
 		a.processCNameRecord(v)
