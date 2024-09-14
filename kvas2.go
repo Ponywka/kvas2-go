@@ -339,6 +339,9 @@ func (a *App) processARecord(aRecord dnsProxy.Address) {
 	names := a.Records.GetCNameRecords(aRecord.Name.String(), true)
 	for _, group := range a.Groups {
 		for _, domain := range group.Domains {
+			if !domain.IsEnabled() {
+				continue
+			}
 			for _, name := range names {
 				if !domain.IsMatch(name) {
 					continue
