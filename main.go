@@ -45,6 +45,7 @@ func main() {
 			for _, err = range appErrs {
 				log.Error().Err(err).Msg("failed to start application")
 			}
+			log.Info().Msg("exiting application")
 			return
 		case <-c:
 			log.Info().Msg("shutting down service")
