@@ -27,11 +27,9 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	appErrsChan := make(chan []error)
+	appResult := make(chan error)
 	go func() {
-		errs := app.Listen(ctx)
-		appErrsChan <- errs
-
+		appResult <- app.Listen(ctx)
 	}()
 
 	log.Info().Msg("starting service")
@@ -41,8 +39,8 @@ func main() {
 
 	for {
 		select {
-		case appErrs, _ := <-appErrsChan:
-			for _, err = range appErrs {
+		case err, _ := <-appResult:
+			if err != nil {
 				log.Error().Err(err).Msg("failed to start application")
 			}
 			log.Info().Msg("exiting application")
