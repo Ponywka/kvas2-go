@@ -108,6 +108,7 @@ func (a *App) Listen(ctx context.Context) []error {
 	listener, err := net.Listen("unix", "/opt/var/run/kvas2-go.sock")
 	if err != nil {
 		handleError(fmt.Errorf("error while serve UNIX socket: %v", err))
+		return errs
 	}
 	defer listener.Close()
 
