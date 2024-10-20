@@ -11,7 +11,7 @@ type IPSet struct {
 	SetName string
 }
 
-func (r *IPSet) Add(addr net.IP, timeout *uint32) error {
+func (r *IPSet) AddIP(addr net.IP, timeout *uint32) error {
 	err := netlink.IpsetAdd(r.SetName, &netlink.IPSetEntry{
 		IP:      addr,
 		Timeout: timeout,
@@ -63,7 +63,7 @@ func (nh *NetfilterHelper) IPSet(name string) (*IPSet, error) {
 	}
 
 	defaultTimeout := uint32(300)
-	err = netlink.IpsetCreate(ipset.SetName, "hash:ip", netlink.IpsetCreateOptions{
+	err = netlink.IpsetCreate(ipset.SetName, "hash:net", netlink.IpsetCreateOptions{
 		Timeout: &defaultTimeout,
 	})
 	if err != nil {

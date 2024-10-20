@@ -22,7 +22,7 @@ type Group struct {
 
 func (g *Group) AddIPv4(address net.IP, ttl time.Duration) error {
 	ttlSeconds := uint32(ttl.Seconds())
-	return g.ipset.Add(address, &ttlSeconds)
+	return g.ipset.AddIP(address, &ttlSeconds)
 }
 
 func (g *Group) DelIPv4(address net.IP) error {
