@@ -472,6 +472,10 @@ func New(config Config) (*App, error) {
 		return nil, fmt.Errorf("netfilter helper init fail: %w", err)
 	}
 	app.NetfilterHelper4 = nh4
+	err = app.NetfilterHelper4.ClearIPTables(app.Config.ChainPrefix)
+	if err != nil {
+		return nil, fmt.Errorf("failed to clear iptables: %w", err)
+	}
 
 	app.Groups = make(map[int]*Group)
 
