@@ -22,7 +22,8 @@ func (r *PortRemap) PutIPTable(table string) error {
 			return fmt.Errorf("failed to clear chain: %w", err)
 		}
 
-		err = r.IPTables.AppendUnique("nat", r.ChainName, "-p", "udp", "--dport", strconv.Itoa(int(r.From)), "-j", "REDIRECT", "--to-port", strconv.Itoa(int(r.To)))
+		// TODO: Add `-d <IP>`
+		err = r.IPTables.AppendUnique("nat", r.ChainName, "-p", "udp", "--dport", strconv.Itoa(int(r.From)), "-j", "DNAT", "--to-destination", fmt.Sprintf(":%d", r.To))
 		if err != nil {
 			return fmt.Errorf("failed to create rule: %w", err)
 		}

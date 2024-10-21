@@ -36,11 +36,13 @@ type App struct {
 
 	DNSProxy         *dnsProxy.DNSProxy
 	NetfilterHelper4 *netfilterHelper.NetfilterHelper
+	NetfilterHelper6 *netfilterHelper.NetfilterHelper
 	Records          *Records
 	Groups           map[int]*Group
 
 	isRunning     bool
 	dnsOverrider4 *netfilterHelper.PortRemap
+	dnsOverrider6 *netfilterHelper.PortRemap
 }
 
 func (a *App) handleLink(event netlink.LinkUpdate) {
@@ -93,11 +95,21 @@ func (a *App) listen(ctx context.Context) (err error) {
 	a.dnsOverrider4 = a.NetfilterHelper4.PortRemap(fmt.Sprintf("%sDNSOR", a.Config.ChainPrefix), 53, a.Config.ListenPort)
 	err = a.dnsOverrider4.Enable()
 	if err != nil {
-		return fmt.Errorf("failed to override DNS: %v", err)
+		return fmt.Errorf("failed to override DNS (IPv4): %v", err)
 	}
 	defer func() {
 		// TODO: Handle error
 		_ = a.dnsOverrider4.Disable()
+	}()
+
+	a.dnsOverrider6 = a.NetfilterHelper6.PortRemap(fmt.Sprintf("%sDNSOR", a.Config.ChainPrefix), 53, a.Config.ListenPort)
+	err = a.dnsOverrider6.Enable()
+	if err != nil {
+		return fmt.Errorf("failed to override DNS (IPv6): %v", err)
+	}
+	defer func() {
+		// TODO: Handle error
+		_ = a.dnsOverrider6.Disable()
 	}()
 
 	for _, group := range a.Groups {
@@ -473,6 +485,16 @@ func New(config Config) (*App, error) {
 	}
 	app.NetfilterHelper4 = nh4
 	err = app.NetfilterHelper4.ClearIPTables(app.Config.ChainPrefix)
+	if err != nil {
+		return nil, fmt.Errorf("failed to clear iptables: %w", err)
+	}
+
+	nh6, err := netfilterHelper.New(true)
+	if err != nil {
+		return nil, fmt.Errorf("netfilter helper init fail: %w", err)
+	}
+	app.NetfilterHelper6 = nh6
+	err = app.NetfilterHelper6.ClearIPTables(app.Config.ChainPrefix)
 	if err != nil {
 		return nil, fmt.Errorf("failed to clear iptables: %w", err)
 	}
