@@ -16,8 +16,8 @@ func main() {
 
 	app, err := New(Config{
 		MinimalTTL:             time.Hour,
-		ChainPostfix:           "KVAS2_",
-		IpSetPostfix:           "kvas2_",
+		ChainPrefix:            "KVAS2_",
+		IpSetPrefix:            "kvas2_",
 		TargetDNSServerAddress: "127.0.0.1:53",
 		ListenPort:             7548,
 	})

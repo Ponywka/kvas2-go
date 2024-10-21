@@ -24,8 +24,8 @@ var (
 
 type Config struct {
 	MinimalTTL             time.Duration
-	ChainPostfix           string
-	IpSetPostfix           string
+	ChainPrefix            string
+	IpSetPrefix            string
 	TargetDNSServerAddress string
 	ListenPort             uint16
 	UseSoftwareRouting     bool
@@ -90,7 +90,7 @@ func (a *App) listen(ctx context.Context) (err error) {
 		}
 	}()
 
-	a.dnsOverrider4 = a.NetfilterHelper4.PortRemap(fmt.Sprintf("%sDNSOR", a.Config.ChainPostfix), 53, a.Config.ListenPort)
+	a.dnsOverrider4 = a.NetfilterHelper4.PortRemap(fmt.Sprintf("%sDNSOR", a.Config.ChainPrefix), 53, a.Config.ListenPort)
 	err = a.dnsOverrider4.Enable()
 	if err != nil {
 		return fmt.Errorf("failed to override DNS: %v", err)
@@ -228,7 +228,7 @@ func (a *App) AddGroup(group *models.Group) error {
 		return ErrGroupIDConflict
 	}
 
-	ipsetName := fmt.Sprintf("%s%d", a.Config.IpSetPostfix, group.ID)
+	ipsetName := fmt.Sprintf("%s%d", a.Config.IpSetPrefix, group.ID)
 	ipset, err := a.NetfilterHelper4.IPSet(ipsetName)
 	if err != nil {
 		return fmt.Errorf("failed to initialize ipset: %w", err)
@@ -238,7 +238,7 @@ func (a *App) AddGroup(group *models.Group) error {
 		Group:        group,
 		iptables:     a.NetfilterHelper4.IPTables,
 		ipset:        ipset,
-		ifaceToIPSet: a.NetfilterHelper4.IfaceToIPSet(fmt.Sprintf("%sR_%d", a.Config.ChainPostfix, group.ID), group.Interface, ipsetName, false),
+		ifaceToIPSet: a.NetfilterHelper4.IfaceToIPSet(fmt.Sprintf("%sR_%d", a.Config.ChainPrefix, group.ID), group.Interface, ipsetName, false),
 	}
 	a.Groups[group.ID] = grp
 	return a.SyncGroup(grp)
