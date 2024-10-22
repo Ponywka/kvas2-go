@@ -18,6 +18,7 @@ func main() {
 		MinimalTTL:             time.Hour,
 		ChainPrefix:            "KVAS2_",
 		IpSetPrefix:            "kvas2_",
+		LinkName:               "br0",
 		TargetDNSServerAddress: "127.0.0.1:53",
 		ListenPort:             7548,
 	})

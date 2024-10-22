@@ -2,13 +2,17 @@ package netfilterHelper
 
 import (
 	"fmt"
-	"github.com/coreos/go-iptables/iptables"
+	"net"
 	"strconv"
+
+	"github.com/coreos/go-iptables/iptables"
+	"github.com/vishvananda/netlink"
 )
 
 type PortRemap struct {
 	IPTables  *iptables.IPTables
 	ChainName string
+	Addresses []netlink.Addr
 	From      uint16
 	To        uint16
 
@@ -22,10 +26,20 @@ func (r *PortRemap) PutIPTable(table string) error {
 			return fmt.Errorf("failed to clear chain: %w", err)
 		}
 
-		// TODO: Add `-d <IP>`
-		err = r.IPTables.AppendUnique("nat", r.ChainName, "-p", "udp", "--dport", strconv.Itoa(int(r.From)), "-j", "DNAT", "--to-destination", fmt.Sprintf(":%d", r.To))
-		if err != nil {
-			return fmt.Errorf("failed to create rule: %w", err)
+		for _, addr := range r.Addresses {
+			var addrIP net.IP
+			iptablesProtocol := r.IPTables.Proto()
+			if (iptablesProtocol == iptables.ProtocolIPv4 && len(addr.IP) == net.IPv4len) || (iptablesProtocol == iptables.ProtocolIPv6 && len(addr.IP) == net.IPv6len) {
+				addrIP = addr.IP
+			}
+			if addrIP == nil {
+				continue
+			}
+
+			err = r.IPTables.AppendUnique("nat", r.ChainName, "-p", "udp", "-d", addrIP.String(), "--dport", strconv.Itoa(int(r.From)), "-j", "DNAT", "--to-destination", fmt.Sprintf(":%d", r.To))
+			if err != nil {
+				return fmt.Errorf("failed to create rule: %w", err)
+			}
 		}
 
 		err = r.IPTables.InsertUnique("nat", "PREROUTING", 1, "-j", r.ChainName)
@@ -78,10 +92,11 @@ func (r *PortRemap) Enable() error {
 	return nil
 }
 
-func (nh *NetfilterHelper) PortRemap(name string, from, to uint16) *PortRemap {
+func (nh *NetfilterHelper) PortRemap(name string, from, to uint16, addr []netlink.Addr) *PortRemap {
 	return &PortRemap{
 		IPTables:  nh.IPTables,
 		ChainName: name,
+		Addresses: addr,
 		From:      from,
 		To:        to,
 	}

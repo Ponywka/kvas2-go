@@ -15,6 +15,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 	"github.com/vishvananda/netlink"
+	"github.com/vishvananda/netlink/nl"
 )
 
 var (
@@ -26,6 +27,7 @@ type Config struct {
 	MinimalTTL             time.Duration
 	ChainPrefix            string
 	IpSetPrefix            string
+	LinkName               string
 	TargetDNSServerAddress string
 	ListenPort             uint16
 	UseSoftwareRouting     bool
@@ -39,6 +41,8 @@ type App struct {
 	NetfilterHelper6 *netfilterHelper.NetfilterHelper
 	Records          *Records
 	Groups           map[int]*Group
+
+	Link netlink.Link
 
 	isRunning     bool
 	dnsOverrider4 *netfilterHelper.PortRemap
@@ -92,7 +96,12 @@ func (a *App) listen(ctx context.Context) (err error) {
 		}
 	}()
 
-	a.dnsOverrider4 = a.NetfilterHelper4.PortRemap(fmt.Sprintf("%sDNSOR", a.Config.ChainPrefix), 53, a.Config.ListenPort)
+	addrList, err := netlink.AddrList(a.Link, nl.FAMILY_ALL)
+	if err != nil {
+		return fmt.Errorf("failed to addrList address: %w", err)
+	}
+
+	a.dnsOverrider4 = a.NetfilterHelper4.PortRemap(fmt.Sprintf("%sDNSOR", a.Config.ChainPrefix), 53, a.Config.ListenPort, addrList)
 	err = a.dnsOverrider4.Enable()
 	if err != nil {
 		return fmt.Errorf("failed to override DNS (IPv4): %v", err)
@@ -102,7 +111,7 @@ func (a *App) listen(ctx context.Context) (err error) {
 		_ = a.dnsOverrider4.Disable()
 	}()
 
-	a.dnsOverrider6 = a.NetfilterHelper6.PortRemap(fmt.Sprintf("%sDNSOR", a.Config.ChainPrefix), 53, a.Config.ListenPort)
+	a.dnsOverrider6 = a.NetfilterHelper6.PortRemap(fmt.Sprintf("%sDNSOR", a.Config.ChainPrefix), 53, a.Config.ListenPort, addrList)
 	err = a.dnsOverrider6.Enable()
 	if err != nil {
 		return fmt.Errorf("failed to override DNS (IPv6): %v", err)
@@ -473,6 +482,12 @@ func New(config Config) (*App, error) {
 	app := &App{}
 
 	app.Config = config
+
+	link, err := netlink.LinkByName(app.Config.LinkName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find link %s: %w", app.Config.LinkName, err)
+	}
+	app.Link = link
 
 	app.DNSProxy = dnsProxy.New(app.Config.ListenPort, app.Config.TargetDNSServerAddress)
 	app.DNSProxy.MsgHandler = app.handleMessage
