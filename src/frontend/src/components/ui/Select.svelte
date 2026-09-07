@@ -31,10 +31,7 @@
 <div class="select-wrap" class:missing={missing_selection} {...rest}>
   <Select.Root type="single" {onValueChange} items={options} bind:value={selected}>
     <Select.Trigger aria-label={ariaLabel}>
-      <div
-        class="selected"
-        class:has-description={selected_description}
-      >
+      <div class="selected" class:has-description={selected_description}>
         <div class="selected-text">
           <div class="selected-value">{selected_label}</div>
           {#if selected_description}
@@ -113,10 +110,10 @@
     border-radius: 0.5rem;
     border: 1px solid var(--bg-light-extra);
     box-shadow: var(--shadow-popover);
-    max-height: 12rem;
+    max-height: min(12rem, var(--bits-select-content-available-height));
     overflow-y: auto;
     width: max-content;
-    min-width: 100%;
+    min-width: var(--bits-select-anchor-width);
     z-index: 10;
   }
 
