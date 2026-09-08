@@ -126,9 +126,7 @@ valid.com`);
 
     const option = page.getByRole("option", { name: "Wildcard" });
 
-    await option.waitFor({ state: "attached" });
-
-    await option.dispatchEvent("click");
+    await option.click();
 
     const wildcardBadge = dialog.locator(".results-view .badge", { hasText: "wildcard" });
     await expect(wildcardBadge).toBeVisible({ timeout: 15000 });

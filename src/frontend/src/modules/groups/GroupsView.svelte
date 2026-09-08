@@ -228,36 +228,34 @@
       {@const isVisible = !store.searchActive || store.visibilityMap.has(group_index)}
 
       <div class="group-wrapper" class:is-hidden={!isVisible}>
-        <div class="group-wrapper-inner">
-          {#if group_index === store.firstVisibleGroupIndex}
-            <div
-              class="group-drop-slot group-drop-slot--top"
-              aria-hidden="true"
-              use:droppable={{
-                data: { group_index, insert: "before" } as GroupDropSlotData,
-                scope: "group",
-                canDrop: (source: GroupDragData, target: GroupDropSlotData) =>
-                  source.group_index !== target.group_index,
-                dropEffect: "move",
-                onDrop: store.handleGroupSlotDrop,
-              }}
-            ></div>
-          {/if}
-
-          <GroupPanel {group_index} on:importRules={() => openImportRulesModal(group_index)} />
-
+        {#if group_index === store.firstVisibleGroupIndex}
           <div
-            class="group-drop-slot group-drop-slot--bottom"
+            class="group-drop-slot group-drop-slot--top"
             aria-hidden="true"
             use:droppable={{
-              data: { group_index, insert: "after" } as GroupDropSlotData,
+              data: { group_index, insert: "before" } as GroupDropSlotData,
               scope: "group",
-              canDrop: () => true,
+              canDrop: (source: GroupDragData, target: GroupDropSlotData) =>
+                source.group_index !== target.group_index,
               dropEffect: "move",
               onDrop: store.handleGroupSlotDrop,
             }}
           ></div>
-        </div>
+        {/if}
+
+        <GroupPanel {group_index} on:importRules={() => openImportRulesModal(group_index)} />
+
+        <div
+          class="group-drop-slot group-drop-slot--bottom"
+          aria-hidden="true"
+          use:droppable={{
+            data: { group_index, insert: "after" } as GroupDropSlotData,
+            scope: "group",
+            canDrop: () => true,
+            dropEffect: "move",
+            onDrop: store.handleGroupSlotDrop,
+          }}
+        ></div>
       </div>
     {/each}
   </div>
@@ -291,15 +289,6 @@
   .group-wrapper {
     position: relative;
     margin: 1rem 0;
-    display: grid;
-    grid-template-rows: 1fr;
-    opacity: 1;
-    transition: none;
-  }
-
-  .group-wrapper-inner {
-    min-height: 0;
-    overflow: hidden;
   }
 
   .group-wrapper.is-hidden {
